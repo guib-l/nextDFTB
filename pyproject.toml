@@ -1,0 +1,30 @@
+[build-system]
+requires = [
+    "scikit-build-core>=0.8",
+    "pybind11>=2.10",
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "nextdftb"
+version = "0.1.0"
+description = "Next-generation DFTB — hybrid Python / C++20 / Fortran 2018 with OpenMP"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.20",
+    "pytest",
+]
+
+[tool.scikit-build]
+cmake.version = ">=3.20"
+cmake.build-type = "Release"
+wheel.packages = []
+wheel.install-dir = "nextdftb"
+
+[tool.scikit-build.cmake.define]
+NEXTDFTB_ENABLE_PYTHON = "ON"
+NEXTDFTB_BUILD_CLI = "OFF"
+NEXTDFTB_BUILD_TESTS = "OFF"
+NEXTDFTB_ENABLE_MPI = "OFF"
