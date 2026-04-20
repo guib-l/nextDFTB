@@ -65,9 +65,9 @@ endif()
 # aliases that must already exist when referenced.
 # ---------------------------------------------------------------------
 add_subdirectory(abi)                 # C ABI headers (INTERFACE target)
-add_subdirectory(kernels_fortran)     # Fortran compute engine
+add_subdirectory(engine)              # Fortran compute engine
 add_subdirectory(io)                  # placeholder I/O abstraction
-add_subdirectory(hpc_mpi)             # deferred MPI interfaces
+# add_subdirectory(hpc_mpi)           # deferred MPI interfaces (excluded from main; reactivate on the dedicated branch)
 add_subdirectory(core_cpp)            # C++ orchestrator
 
 if(NEXTDFTB_ENABLE_PYTHON)

@@ -1,7 +1,7 @@
 // nextDFTB — standalone CLI.
 //
 // Single global executable that links every layer (core_cpp -> abi ->
-// kernels_fortran) and can run the infrastructure smoke test without
+// engine) and can run the infrastructure smoke test without
 // Python.
 //
 // Invocation:

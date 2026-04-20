@@ -5,7 +5,7 @@
 #   * Implements the logging-sink ABI (thread-safe)
 #   * Provides the C++ API used by the CLI, pybind11 bindings and tests
 #
-# Links against nextdftb_abi_c (headers) and nextdftb_kernels_fortran
+# Links against nextdftb_abi_c (headers) and nextdftb_engine
 # (the Fortran symbols nextdftb_init / _finalize / _test).
 
 set(NEXTDFTB_CORE_CPP_SOURCES
@@ -36,7 +36,7 @@ target_compile_definitions(nextdftb_core_cpp PRIVATE
 
 target_link_libraries(nextdftb_core_cpp
     PUBLIC  nextdftb::abi_c
-    PRIVATE nextdftb::kernels_fortran
+    PRIVATE nextdftb::engine
 )
 
 # When linking a C++ shared library against a Fortran static archive, we need

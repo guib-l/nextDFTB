@@ -18,7 +18,7 @@ MPI layer.
                      │   ← C ABI (abi/)  iso_c_binding types only
           ┌──────────▼──────────┐
           │   Fortran 2018      │   Production compute engine.
-          │  (kernels_fortran)  │   OpenMP-parallel kernels.
+          │      (engine)       │   OpenMP-parallel kernels.
           └─────────────────────┘
 
           ┌─────────────────────┐
@@ -36,7 +36,7 @@ MPI layer.
 | Directory           | Role                                                        |
 |---------------------|-------------------------------------------------------------|
 | `abi/`              | Public C ABI headers (`nextdftb_*`)                          |
-| `kernels_fortran/`  | Fortran 2018 compute engine with BIND(C) facade              |
+| `engine/`           | Fortran 2018 compute engine with BIND(C) facade              |
 | `core_cpp/`         | C++20 orchestrator, aligned buffers, logger, error state     |
 | `bindings/`         | pybind11 extension module `nextdftb._core`                   |
 | `cli/`              | Standalone CLI executable `nextdftb`                          |

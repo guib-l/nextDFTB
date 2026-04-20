@@ -1,6 +1,8 @@
 # Personnal customization
 del/
 docs/
+hpc_mpi/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

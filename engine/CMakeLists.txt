@@ -22,24 +22,24 @@ set(NEXTDFTB_FORTRAN_SOURCES
     src/nextdftb_abi.f90
 )
 
-add_library(nextdftb_kernels_fortran STATIC ${NEXTDFTB_FORTRAN_SOURCES})
-add_library(nextdftb::kernels_fortran ALIAS nextdftb_kernels_fortran)
+add_library(nextdftb_engine STATIC ${NEXTDFTB_FORTRAN_SOURCES})
+add_library(nextdftb::engine ALIAS nextdftb_engine)
 
 # Fortran modules emitted by this target end up in a dedicated sub-directory
 # so downstream consumers (if any) can locate the .mod files.
-set_target_properties(nextdftb_kernels_fortran PROPERTIES
-    Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules/kernels_fortran
+set_target_properties(nextdftb_engine PROPERTIES
+    Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules/engine
     POSITION_INDEPENDENT_CODE ON
 )
 
-target_link_libraries(nextdftb_kernels_fortran
+target_link_libraries(nextdftb_engine
     PUBLIC
         nextdftb::abi_c
         LAPACK::LAPACK
 )
 
 if(NEXTDFTB_ENABLE_OPENMP)
-    target_link_libraries(nextdftb_kernels_fortran PUBLIC OpenMP::OpenMP_Fortran)
+    target_link_libraries(nextdftb_engine PUBLIC OpenMP::OpenMP_Fortran)
 endif()
 
 # ---------------------------------------------------------------------
@@ -48,8 +48,8 @@ endif()
 # ---------------------------------------------------------------------
 if(NEXTDFTB_BUILD_FORTRAN_MAIN)
     add_executable(nextdftb_main src/nextdftb_main.f90)
-    target_link_libraries(nextdftb_main PRIVATE nextdftb_kernels_fortran)
+    target_link_libraries(nextdftb_main PRIVATE nextdftb_engine)
     set_target_properties(nextdftb_main PROPERTIES
-        Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules/kernels_fortran
+        Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules/engine
     )
 endif()
