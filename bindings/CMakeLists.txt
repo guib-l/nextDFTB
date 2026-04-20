@@ -1,8 +1,17 @@
 # nextDFTB — Python bindings (pybind11).
 #
-# Produces the compiled extension module `nextdftb._core` and stages the
-# pure-Python package files next to it in ${CMAKE_BINARY_DIR}/python, so
-# the in-tree layout works with `PYTHONPATH=build/python python`.
+# Layout
+#   python/abi/   pybind11 C++ glue — translates the C++ orchestrator and
+#                 the C ABI into the compiled extension `nextdftb._core`.
+#                 This is the ABI layer: exception translation, dtype /
+#                 layout normalization, submodule registration.
+#   python/api/   Pure-Python package `nextdftb/` — ergonomic wrappers,
+#                 logging bridge, and anything end users import directly.
+#                 No native code here; only Python sources.
+#
+# The compiled extension lands next to the pure-Python package in
+# ${CMAKE_BINARY_DIR}/python/nextdftb/, so the in-tree layout works with
+# `PYTHONPATH=build/python python`.
 
 if(NOT NEXTDFTB_ENABLE_PYTHON)
     return()
@@ -10,7 +19,7 @@ endif()
 
 find_package(pybind11 REQUIRED CONFIG)
 
-pybind11_add_module(nextdftb_py_core MODULE python/module.cpp)
+pybind11_add_module(nextdftb_py_core MODULE python/abi/module.cpp)
 add_library(nextdftb::py_core ALIAS nextdftb_py_core)
 
 target_link_libraries(nextdftb_py_core PRIVATE nextdftb::core_cpp)
@@ -34,8 +43,8 @@ endif()
 set(_nextdftb_py_pkg_dir "${CMAKE_BINARY_DIR}/python/nextdftb")
 file(MAKE_DIRECTORY "${_nextdftb_py_pkg_dir}")
 
-configure_file(python/nextdftb/__init__.py     "${_nextdftb_py_pkg_dir}/__init__.py"     COPYONLY)
-configure_file(python/nextdftb/_log_handler.py "${_nextdftb_py_pkg_dir}/_log_handler.py" COPYONLY)
+configure_file(python/api/nextdftb/__init__.py     "${_nextdftb_py_pkg_dir}/__init__.py"     COPYONLY)
+configure_file(python/api/nextdftb/_log_handler.py "${_nextdftb_py_pkg_dir}/_log_handler.py" COPYONLY)
 
 # Install layout.
 #   * Under scikit-build-core (`pip install .`), SKBUILD is defined and
@@ -45,13 +54,13 @@ configure_file(python/nextdftb/_log_handler.py "${_nextdftb_py_pkg_dir}/_log_han
 #   * Under a plain `cmake --install`, we fall back to Python3_SITEARCH.
 if(SKBUILD)
     install(TARGETS nextdftb_py_core LIBRARY DESTINATION ".")
-    install(DIRECTORY python/nextdftb/
+    install(DIRECTORY python/api/nextdftb/
             DESTINATION   "."
             FILES_MATCHING PATTERN "*.py")
 elseif(Python3_SITEARCH)
     install(TARGETS nextdftb_py_core
             LIBRARY DESTINATION "${Python3_SITEARCH}/nextdftb")
-    install(DIRECTORY python/nextdftb/
+    install(DIRECTORY python/api/nextdftb/
             DESTINATION   "${Python3_SITEARCH}/nextdftb"
             FILES_MATCHING PATTERN "*.py")
 endif()
