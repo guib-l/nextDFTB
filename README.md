@@ -26,26 +26,30 @@ MPI layer.
           └─────────────────────┘   Links core_cpp, runs without Python.
 
           ┌─────────────────────┐
-          │   HPC / MPI         │   DESIGN ONLY — implementation deferred.
-          │   (hpc_mpi/)        │   Cartesian topology, halo exchange,
-          └─────────────────────┘   collective reductions.
+          │   HPC / MPI         │   DESIGN ONLY — kept as a reference sketch,
+          │   (hpc_mpi/)        │   excluded from the main build. Reactivated
+          └─────────────────────┘   on the dedicated MPI branch.
 ```
 
 ### Source tree
 
-| Directory           | Role                                                        |
-|---------------------|-------------------------------------------------------------|
-| `abi/`              | Public C ABI headers (`nextdftb_*`)                          |
-| `engine/`           | Fortran 2018 compute engine with BIND(C) facade              |
-| `core_cpp/`         | C++20 orchestrator, aligned buffers, logger, error state     |
-| `bindings/`         | pybind11 extension module `nextdftb._core`                   |
-| `cli/`              | Standalone CLI executable `nextdftb`                          |
-| `io/`               | Placeholder I/O abstraction (text writer; HDF5 deferred)     |
-| `hpc_mpi/`          | Design-only MPI interfaces (stubs throw when linked)         |
-| `config/`, `logging/`, `docs/` | Reserved for future artefacts                     |
-| `tests/`            | CTest-driven pytest runners                                  |
-| `examples/`         | End-user examples (Python)                                   |
-| `cmake/`            | Shared CMake modules                                         |
+| Directory           | Role                                                                      |
+|---------------------|---------------------------------------------------------------------------|
+| `abi/`              | Public C ABI headers (`nextdftb_*`)                                        |
+| `engine/`           | Fortran 2018 compute engine — `core/` (kernels) + `abi/` (BIND(C) facade) |
+| `core_cpp/`         | C++20 orchestrator, aligned buffers, logger, error state                   |
+| `bindings/python/`  | Python bindings — `abi/` (pybind11 glue `_core`) + `api/` (pure-Python)    |
+| `cli/`              | Standalone CLI executable `nextdftb`                                        |
+| `io/`               | Placeholder I/O abstraction (text writer; HDF5 deferred)                   |
+| `hpc_mpi/`          | Design sketch of the MPI layer — excluded from the default build            |
+| `config/`, `logging/`, `docs/` | Reserved for future artefacts                                   |
+| `tests/`            | CTest-driven suite: `unit/python/` (pytest) + `runners/` (install smoke)   |
+| `examples/`         | End-user examples (reserved — no sources yet)                              |
+| `cmake/`            | Shared CMake modules                                                       |
+
+Each Python/Fortran layer has its own README with the per-layer contribution
+guide: [`engine/README.md`](engine/README.md) for the Fortran side and
+[`bindings/python/README.md`](bindings/python/README.md) for the Python side.
 
 ## Requirements
 
@@ -146,15 +150,25 @@ nextdftb.finalize()
 ```
 
 The public Python surface is currently `init`, `finalize`, `is_initialized`,
-`test`, `version`, and the `log` submodule. Numerical kernels (saxpy, L2
-norm, …) are not yet exposed — only the infrastructure smoke test is wired
-end-to-end at this stage.
+`test`, `version`, `install_python_logging_bridge`, and the `log` submodule.
+Numerical kernels (saxpy, L2 norm, …) are not yet exposed — only the
+infrastructure smoke test is wired end-to-end at this stage.
+
+With the full build (option 2 above), the Python package is staged at
+`build/python/nextdftb/` — hence the `PYTHONPATH=build/python` above.
 
 ## Tests
 
 ```bash
 ctest --test-dir build --output-on-failure
 ```
+
+The suite has two tiers:
+
+- `tests/unit/python/` — pytest unit tests that drive the `nextdftb`
+  Python package directly (lifecycle, logging, public API, version).
+- `tests/runners/` — install-time smoke tests for the CLI binary and the
+  `import nextdftb` entry point.
 
 ## License
 

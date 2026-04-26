@@ -1,7 +1,10 @@
 # Personnal customization
-del/
 docs/
-hpc_mpi/
+
+# AI special files
+.claude/
+CLAUDE.md
+PLAN.md
 
 
 # Byte-compiled / optimized / DLL files
