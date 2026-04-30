@@ -5,49 +5,53 @@ add_executable(nextdftb
     base/constants.f90
     base/units.f90
     base/default.f90
-    base/keywords.f90
+    base/atoms.f90
+    base/molecule.f90
+    base/structure.f90
     base/globals.f90
 
     errors/errors.f90
 
-    io/parser/parse_input.f90
-    io/parser/parse_param.f90
-    io/logger/timer.f90
-    io/logger/logger.f90
-    io/output/write_matrix.f90
-    io/output/write_output.f90
-    io/output/dftb_results.f90
+    utils/logger/timer.f90
+    utils/logger/logger.f90
+    utils/output/write_output.f90
+    utils/output/write_matrix.f90
 
-    dftb/skf/readskf.f90
-    dftb/skf/interp.f90
+    parser/keywords.f90
+    parser/parse_input.f90
+    parser/parse_geometry.f90
 
-    dftb/build/dftb_matrix.f90
+    skf/slakos.f90
+    skf/readskf.f90
+    skf/interp.f90
+    skf/electronic.f90
+    skf/repulsive.f90
+    skf/write_skf.f90
+    skf/skf.f90
+
+    dftb/dftbstate.f90
+    dftb/write_dftb.f90
+    dftb/build/skrot.f90
+    dftb/build/matel.f90
     dftb/build/gamma.f90
     dftb/build/density.f90
-
-    dftb/compute/diag.f90
-    dftb/compute/charges.f90
     dftb/compute/coulomb.f90
+    dftb/compute/charges.f90
     dftb/compute/dftb_energy.f90
     dftb/compute/dftb_grad.f90
-
+    dftb/solver/linalg.f90
+    dftb/solver/mixer.f90
+    dftb/solver/scc.f90
     dftb/repulsif/repulsif.f90
-
-    dftb/resolved/linalg.f90
-    dftb/resolved/mixer.f90
-    dftb/resolved/scc.f90
-
-    dftb/qmmm/qmmm.f90
     dftb/disp/disp.f90
     dftb/pola/pola.f90
+    dftb/dftb.f90
 
-    skf/skf_gen.f90
     dft/dft.f90
 
     driver/opt/opt.f90
     driver/md/md.f90
-
-    dftb/dftb.f90
+    driver/single_point.f90
     driver/driver.f90
 
     cli.f90

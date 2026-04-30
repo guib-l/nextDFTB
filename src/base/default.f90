@@ -4,10 +4,13 @@ module defaults
     implicit none
     private
 
-    character(len=*), parameter, public :: DEFAULT_EXT      = ".skf"
-    character(len=*), parameter, public :: DEFAULT_TYPE     = "VALENCE"
-    character(len=*), parameter, public :: DEFAULT_OUT      = "results.out"
-    character(len=*), parameter, public :: DEFAULT_LOG      = "logs"
+    character(len=*), parameter, public :: DEFAULT_GEO  = "geometry.dat"
+    character(len=*), parameter, public :: DEFAULT_EXT  = ".skf"
+    character(len=*), parameter, public :: DEFAULT_SEP  = "-"
+    character(len=*), parameter, public :: DEFAULT_SRC  = "."
+    character(len=*), parameter, public :: DEFAULT_TYPE = "spd"
+    character(len=*), parameter, public :: DEFAULT_OUT  = "results.out"
+    character(len=*), parameter, public :: DEFAULT_LOG  = "logs"
 
     integer,  parameter, public :: DEFAULT_MAXSCC = 100
     real(wp), parameter, public :: DEFAULT_TOLSCC = 1.0e-5_wp

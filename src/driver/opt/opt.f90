@@ -1,4 +1,4 @@
-!> Optimisation de géométrie — placeholder.
+!> Driver d'optimisation de géométrie (placeholder, non implémenté).
 module opt
     implicit none
     private

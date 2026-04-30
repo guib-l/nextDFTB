@@ -1,49 +1,51 @@
-!> Driver par défaut : effectue un calcul DFTB simple-point et écrit la sortie.
+!> Driver par défaut : sélectionne le pipeline en fonction de l'input.
 !>
-!> Le driver n'utilise QUE les méthodes publiques de dftb.
+!> Pour le calculateur DFTB/DFT, le driver par défaut est `single_point`.
+!> Sinon, le driver termine simplement le programme.
 module driver
-    use kinds,         only: wp
-    use globals,       only: input_t
-    use dftb,          only: dftb_init   => init,    &
-                              dftb_exec   => execute, &
-                              get_total_energy, get_repulsive_energy, &
-                              get_coulomb_energy, get_band_energy,    &
-                              get_charges
-    use write_output,  only: open_output, close_output, banner, section, line
-    use dftb_results,  only: write_dftb_summary
-    use logger,        only: log_open, log_close
+    use kinds,           only: wp
+    use structure_mod,   only: structure_t
+    use parse_input,     only: input_t
+    use single_point,    only: run_single_point
+    use write_output,    only: open_output, close_output, &
+                                write_header, write_footer, write_timings
+    use timer,           only: timer_t, tic, toc, timer_record, timer_reset
+    use logger,          only: log_open, log_close
+    use errors,          only: warn
     implicit none
     private
+
+    character(len=*), parameter :: PROG_TITLE   = "nextDFTB — single point"
+    character(len=*), parameter :: PROG_VERSION = "0.1.0"
 
     public :: run_default
 
 contains
 
-    subroutine run_default(inp)
-        type(input_t), intent(in) :: inp
-        real(wp) :: e_tot, e_band, e_coul, e_rep
-        real(wp), allocatable :: q(:)
-        character(len=128) :: buf
+    subroutine run_default(struct, inp)
+        type(structure_t), intent(in) :: struct
+        type(input_t),     intent(in) :: inp
+        type(timer_t) :: t_total
 
-        if (inp%out%log_on) call log_open(inp%out%log)
-        call open_output(inp%out%out)
-        call banner("nextDFTB — single point")
+        call timer_reset()
+        call tic(t_total)
 
-        call section("input summary")
-        write(buf, '(a,i0)') "  natoms = ", inp%geom%natoms; call line(buf)
-        write(buf, '(a,a)')  "  basis  = ", trim(inp%basis%src); call line(buf)
-        write(buf, '(a,l1)') "  scc    = ", inp%calc%scc; call line(buf)
+        if (inp%out%log_on) call log_open(trim(inp%out%log))
+        call open_output(trim(inp%out%out))
+        call write_header(PROG_TITLE, PROG_VERSION)
 
-        call dftb_init(inp%geom, inp%basis, inp%calc)
-        call dftb_exec(.false.)
+        select case (trim(inp%calc%kind))
+        case ("DFTB", "DFT")
+            call run_single_point(struct, inp)
+        case default
+            call warn("driver", "no driver path for calc kind: "//trim(inp%calc%kind))
+        end select
 
-        e_tot  = get_total_energy()
-        e_band = get_band_energy()
-        e_coul = get_coulomb_energy()
-        e_rep  = get_repulsive_energy()
-        q      = get_charges()
+        call toc(t_total)
+        call timer_record("total", t_total)
 
-        call write_dftb_summary(e_tot, e_band, e_coul, e_rep, q)
+        call write_timings()
+        call write_footer()
 
         call close_output()
         call log_close()

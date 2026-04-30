@@ -4,52 +4,56 @@ Implémentation minimale et modulaire d'un moteur **DFTB** (Density Functional
 Tight-Binding) en **Fortran 2018**. L'objectif est la lisibilité, la cohérence
 de l'architecture et un code de calcul fonctionnel sans sur-ingénierie.
 
-Le code lit un input texte décrivant une géométrie, une base SKF et un
-calculateur, puis produit un calcul DFTB simple-point (énergie + charges
-Mulliken).
+Le code lit un fichier `input.dat` décrivant le calcul et un fichier
+`geometry.dat` (format xyz étendu), puis exécute le calculateur correspondant
+(DFTB ou SKF).
+
+Voir [`PLAN.md`](PLAN.md) pour la spécification complète.
 
 ## Architecture
 
 ```
-input.in
+input.dat
+geometry.dat
    │
    ▼
- main.f90 ──► cli ──► parse_input ──► driver ──► dftb (façade)
-                                                     │
-                                                     ├─ skf       (lecture/interp SKF)
-                                                     ├─ build     (H, S, gamma, density)
-                                                     ├─ compute   (diag, charges, coulomb, énergie)
-                                                     ├─ repulsif  (énergie répulsive)
-                                                     └─ resolved  (SCC, mixer, linalg)
-                                                     │
-                                                     ▼
-                                                 write_output
+ main ──► cli ──► parse_input / parse_geometry
+                          │
+                          ▼
+                       driver ──► calculateur (dftb | skf | dft)
+                                          │
+                                          ▼
+                                    write_output
 ```
 
 ### Arborescence
 
 ```
 src/
-├── base/         constants, units, kind, default, keywords, globals
+├── base/         kind, constants, units, default, atoms, molecule, structure, globals
 ├── dftb/
-│   ├── skf/      readskf, interp
-│   ├── build/    dftb_matrix (H/S, Slater-Koster), gamma, density
-│   ├── compute/  diag, charges (Mulliken), coulomb, dftb_energy, dftb_grad
+│   ├── build/    matel, gamma, density, skrot
+│   ├── compute/  dftb_energy, dftb_grad, coulomb, charges
+│   ├── solver/   scc, mixer (simple/Broyden), linalg
 │   ├── repulsif/ repulsif
-│   ├── resolved/ scc, mixer (simple/Anderson), linalg
-│   ├── qmmm/ disp/ pola/   (placeholders)
-│   └── dftb.f90  façade publique unique du calculateur
-├── skf/, dft/    (placeholders)
+│   ├── disp/, pola/        (placeholders)
+│   ├── dftbstate.f90       état du dernier calcul
+│   ├── write_dftb.f90      sortie spécialisée DFTB
+│   └── dftb.f90            façade publique unique
+├── skf/          skf, readskf, interp, electronic, repulsive, slakos, write_skf
+├── dft/          dft.f90 (placeholder)
 ├── driver/
-│   ├── driver.f90  driver simple-point par défaut
-│   └── opt/, md/   (placeholders)
-├── io/
-│   ├── parser/   parse_input, parse_param
+│   ├── driver.f90, single_point.f90
+│   └── opt/, md/           (placeholders)
+├── parser/       parse_input, parse_geometry, keywords
+├── utils/
 │   ├── logger/   timer, logger
-│   └── output/   write_matrix, write_output, dftb_results
+│   └── output/   write_output, write_matrix
 ├── errors/       errors (gestion centralisée)
 ├── cli.f90       CLI minimaliste
 └── main.f90      entrée principale
+
+test/             tests unitaires (CTest, cf. plus bas)
 ```
 
 ### Interface publique du module `dftb`
@@ -58,9 +62,9 @@ Le module `dftb.f90` est le **seul** point d'entrée du calculateur. Il expose
 exactement :
 
 ```fortran
-subroutine init(geometry, basis, calc)
+subroutine init(geometry, basis)
 subroutine execute(dograd)
-function   get_total_energy()       ! Hartree
+function   get_total_energy()
 function   get_repulsive_energy()
 function   get_coulomb_energy()
 function   get_band_energy()
@@ -68,8 +72,21 @@ function   get_gradient()           ! (3, natoms)
 function   get_charges()            ! (natoms) — Mulliken
 ```
 
-Aucune autre méthode publique n'est autorisée. Le driver et tout code client
-n'utilisent que ces routines — pas d'accès direct aux modules internes.
+### Interface publique du module `skf`
+
+```fortran
+subroutine init(geometry, basis)
+subroutine readslako
+subroutine build_repulsion
+subroutine build_electronic
+function   get_repulsive(atom_A, atom_B, r)
+function   get_overlaps(atom_A, atom_B, r, binding)
+function   get_hamiltonian(atom_A, atom_B, r, binding)
+function   get_hubbard(atom_A)
+function   get_eps(atom_A)
+```
+
+Aucune autre méthode publique n'est autorisée.
 
 ## Prérequis
 
@@ -93,107 +110,199 @@ L'exécutable est produit dans `build/src/nextdftb`.
 |--------------------------|---------|----------------------------------------|
 | `CMAKE_BUILD_TYPE`       | Release | `Debug`, `Release`, `RelWithDebInfo`   |
 | `NEXTDFTB_ENABLE_OPENMP` | ON      | Active OpenMP dans les noyaux          |
+| `NEXTDFTB_ENABLE_TESTS`  | ON      | Compile les tests unitaires `test/`    |
 
 ## Utilisation
 
 ```bash
-build/src/nextdftb input.in
+build/src/nextdftb input.dat
 ```
 
-Si aucun fichier n'est passé en argument, `input.in` est utilisé par défaut.
+## Format des fichiers d'entrée
 
-## Format d'input
+Deux fichiers sont nécessaires :
 
-L'input est un fichier texte structuré en sections `SECTION = { ... }`.
-Les balises autorisées sont : `GEOMETRY`, `BASIS`, `CALC`, `DRIVER`, `OUTPUT`.
+- `input.dat` — description du calcul (sections `GEOMETRY`, `BASIS`, `CALC`,
+  `DRIVER`, `OUTPUT`, `SYSTEM`, `OPTION`).
+- `geometry.dat` — géométrie au format xyz étendu :
 
-### Mots-clés
+  ```
+  natoms
+  commentaire
+  symbol  x  y  z  charge
+  ...
+  ```
 
-| Section    | Clé      | Type     | Défaut         | Description                                |
-|------------|----------|----------|----------------|--------------------------------------------|
-| `GEOMETRY` | `NATOMS` | int      | —              | Nombre d'atomes (suivi des lignes atomes)  |
-| `BASIS`    | `SRC`    | string   | —              | Dossier contenant les fichiers SKF         |
-| `BASIS`    | `EXT`    | string   | `.skf`         | Extension des fichiers SKF                 |
-| `BASIS`    | `SEP`    | string   | —              | Séparateur entre symboles (ex: `-`)        |
-| `BASIS`    | `TYPE`   | string   | `VALENCE`      | Type des paramètres (seul `VALENCE` géré)  |
-| `CALC.DFTB`| `SCC`    | bool     | `False`        | Calcul SCC-DFTB                            |
-| `CALC.DFTB`| `MAXSCC` | int      | `100`          | Itérations SCC max                         |
-| `CALC.DFTB`| `TOLSCC` | float    | `1e-5`         | Tolérance SCC sur max\|Δq\|                |
-| `OUTPUT`   | `OUT`    | string   | `results.out`  | Fichier d'output                           |
-| `OUTPUT`   | `LOG`    | string/bool | `False`     | Fichier de log (ou `False` pour désactiver) |
+  Coordonnées en angström, converties en bohr en interne. La colonne
+  `charge` est la charge atomique initiale.
 
-Lignes atomes (dans `GEOMETRY`, en angström) :
+### Mots-clés principaux
 
-```
-SYMBOLE  X  Y  Z  [GROUPE]
-```
+| Section     | Clé        | Défaut          | Description                             |
+|-------------|------------|-----------------|-----------------------------------------|
+| `GEOMETRY`  | `GEO`      | `geometry.dat`  | Fichier de géométrie                    |
+| `BASIS`     | `SRC`      | `.`             | Dossier des fichiers SKF                |
+| `BASIS`     | `EXT`      | `.skf`          | Extension des fichiers SKF              |
+| `BASIS`     | `SEP`      | `-`             | Séparateur entre symboles               |
+| `BASIS`     | `TYPE`     | `spd`           | `spd`, `spdf` ou `custom`               |
+| `BASIS`     | `ORBITALS` | —               | Orbitales de valence par atome          |
+| `CALC.DFTB` | `SCC`      | `False`         | Active SCC-DFTB                         |
+| `CALC.DFTB` | `MAXSCC`   | `100`           | Itérations SCC max                      |
+| `CALC.DFTB` | `TOLSCC`   | `1e-5`          | Tolérance SCC                           |
+| `DRIVER`    | `TYPE`     | `SINGLE`        | Type de driver                          |
+| `OUTPUT`    | `OUT`      | `results.out`   | Fichier de sortie                       |
+| `OUTPUT`    | `LOG`      | (désactivé)     | Fichier de log                          |
 
-Le `GROUPE` est facultatif (entier ≥ 1).
+Spécification complète : voir [`PLAN.md`](PLAN.md).
 
-### Exemple
+### Exemple — `input.dat`
 
 ```
 GEOMETRY = {
-    NATOMS = 3
-    O 0.00 0.00 0.00
-    H 0.00 0.96 0.00
-    H 0.93 -0.24 0.00
+    GEO = geometry.dat
 }
 
 BASIS = {
-    SRC = "./basis/mio-1-1/"
-    SEP = "-"
-    TYPE = VALENCE
+    SRC = ./basis/mio-1-1/
+    SEP = -
+    TYPE = spd
+    ORBITALS = {
+        H = 1s
+        O = 2s 2p
+    }
 }
 
 CALC = {
     DFTB = {
         SCC = True
         MAXSCC = 100
-        TOLSCC = 1e-5
+        TOLSCC = 1e-7
     }
+}
+
+DRIVER = {
+    TYPE = SINGLE
 }
 
 OUTPUT = {
     OUT = "results.out"
-    LOG = False
 }
 ```
 
+### Exemple — `geometry.dat`
+
+```
+3
+water
+ O 0.00 0.00 0.00 0.0
+ H 0.00 0.96 0.00 0.0
+ H 0.93 -0.24 0.00 0.0
+```
+
+## Format du fichier de sortie
+
+Le fichier `OUT` (par défaut `results.out`) suit toujours la même structure :
+
+1. **Entête** — bannière, version et horodatage de démarrage.
+2. **Calculation properties** — rappel du driver, du calculateur, des
+   options SCC, de la géométrie (xyz en Å) et de la base.
+3. **Sortie du calculateur** — pour DFTB : entête de la boucle SCF
+   (`scc_enabled`, `max_iterations`, `tolerance`), une ligne par itération
+   `iter / max|dq|`, statut de convergence.
+4. **Résultat final** — pour DFTB : énergies (`E_band`, `E_coulomb`,
+   `E_repulsive`, `E_total`) et charges Mulliken par atome.
+5. **Execution timings (s)** — temps CPU des phases enregistrées
+   (`dftb_init`, `dftb_execute`, `total`, …) via le registre du module
+   `timer`.
+6. **Footer** — bannière de clôture avec horodatage de fin.
+
+Extrait :
+
+```
+======================================================================
+nextDFTB — single point
+======================================================================
+  version             : 0.1.0
+  started             : 2026-04-30  07:47:30
+
+----------------------------------------------------------------------
+ SCF cycle
+----------------------------------------------------------------------
+  scc_enabled         : True
+  max_iterations      : 100
+  tolerance           :     1.0000000000E-07
+
+    iter        max|dq|
+       1        7.823478E-01
+      ...
+      55        7.733238E-08
+
+  converged in        : 55
+
+----------------------------------------------------------------------
+ DFTB final result
+----------------------------------------------------------------------
+
+  > Energies (Hartree)
+  E_total             :    -3.6303661258E+00
+  ...
+
+----------------------------------------------------------------------
+ Execution timings (s)
+----------------------------------------------------------------------
+  dftb_init           :       0.026428
+  dftb_execute        :       0.014326
+  total               :       0.041802
+```
+
+Côté code :
+
+- `utils/output/write_output.f90` — entête, sections, helpers `kv_*`,
+  `write_timings`, `write_footer`.
+- `dftb/write_dftb.f90` — `write_dftb_scc_header`, `write_dftb_scc_iter`,
+  `write_dftb_scc_status`, `write_dftb_final`.
+- `utils/logger/timer.f90` — `tic`/`toc`/`elapsed` et registre nommé
+  (`timer_record`, `timer_count`, `timer_get`, `timer_reset`) consommé par
+  `write_timings`.
+
+## Tests unitaires
+
+Les tests sont dans `test/`, sans framework externe (CTest pilote l'exécution).
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j
+(cd build && ctest --output-on-failure)
+```
+
+Suites courantes :
+
+| Test                     | Cible                                            |
+|--------------------------|--------------------------------------------------|
+| `test_units`             | Conversions Bohr↔Å, Ha↔eV (round-trip)           |
+| `test_atoms`             | Objet `atoms_t` et `atoms_set`                   |
+| `test_structure`         | `structure_init`, `structure_set_atom`, molécule |
+| `test_parse_geometry`    | Round-trip `write_geometry` / `read_geometry`    |
+
 ## Pipeline de calcul
 
-1. `parse_input` lit l'input et remplit un `input_t` (géométrie en bohr, base, calc, output).
-2. `driver%run_default` initialise `dftb` et appelle `execute`.
-3. `dftb%init` charge tous les fichiers SKF nécessaires (toutes les paires
-   `A-B.skf` pour les éléments présents) et construit le `basis_system_t`
-   (orbitales s/p par atome, mapping atome → orbitales globales).
-4. `dftb%execute` :
-   - construit `H₀` (Slater-Koster, orbitales s/p) et `S` ;
-   - construit la matrice `gamma` (forme Klopman-Ohno) ;
-   - exécute la boucle SCC :
-     `H = H₀ + ½ S (V_A + V_B)`, diag `H C = S C ε`, occupations Aufbau,
-     densité `P`, charges Mulliken, mélange (simple ou Anderson) jusqu'à
-     `max|Δq_new − Δq_old| < TOLSCC` ;
-   - calcule l'énergie répulsive depuis les splines/polynômes des SKF ;
-   - assemble `E_total = E_band − E_coul + E_rep`.
-5. `driver` écrit le résumé via `write_output` / `dftb_results`.
-
-## Limites actuelles
-
-- Orbitales `d` non supportées dans la transformation Slater-Koster
-  (erreur explicite si rencontrées). Seul s/p est implémenté.
-- Gradient analytique non implémenté : `get_gradient()` retourne 0.
-- Le mixer Broyden complet n'est pas finalisé ; le mode `broyden` se replie
-  sur un mixing simple avec historique.
-- `DRIVER`, `DFT`, génération de SKF, QMMM, dispersion, polarisation,
-  optimisation et MD : modules placeholders uniquement.
-- Format SKF étendu (préfixe `@`) non supporté.
+1. `parse_input` lit `input.dat` ; `parse_geometry` lit `geometry.dat` et
+   construit les objets `Atoms` / `Molecule` / `Structure`.
+2. Le driver (par défaut `single_point`) appelle l'interface publique du
+   calculateur sélectionné.
+3. Le calculateur DFTB charge les fichiers SKF nécessaires via le module
+   `skf`, construit `H₀`, `S` et la matrice `gamma`, exécute la boucle SCC,
+   calcule l'énergie répulsive et assemble l'énergie totale.
+4. Le driver écrit l'entête et les propriétés du calcul, le calculateur
+   pousse ses étapes (boucle SCF, résultat final) via `write_dftb`, puis
+   le driver clôt le fichier avec les timings (`write_timings`) et le
+   footer.
 
 ## Règles de conception
 
 - Un fichier = un module, une responsabilité par module.
 - Pas de logique métier dans `main.f90`.
-- Pas de couplage fort : les données circulent explicitement par arguments.
+- Pas de couplage fort : les données circulent explicitement.
 - Aucune dépendance externe non listée.
 - Erreurs centralisées dans `errors.f90` (pas de `STOP` brutal).
 

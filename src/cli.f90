@@ -14,7 +14,7 @@ contains
 
         nargs = command_argument_count()
         if (nargs < 1) then
-            input_file = "input.in"
+            input_file = "input.dat"
         else
             call get_command_argument(1, arg, length=l)
             input_file = trim(arg(1:l))

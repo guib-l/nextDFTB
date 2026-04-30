@@ -5,7 +5,7 @@ module logger
     implicit none
     private
 
-    integer, save :: log_unit = -1
+    integer, save :: log_unit   = -1
     logical, save :: log_active = .false.
 
     public :: log_open, log_close, log_msg, log_is_active

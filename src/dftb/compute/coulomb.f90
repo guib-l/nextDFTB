@@ -1,5 +1,6 @@
 !> Énergie coulombienne 2nd ordre DFTB :
-!>      E_coul = (1/2) Σ_{A,B} γ_AB Δq_A Δq_B
+!>
+!>   E_coul = (1/2) Σ_{A,B} γ_AB Δq_A Δq_B
 module coulomb
     use kinds, only: wp
     implicit none
@@ -23,7 +24,6 @@ contains
         e = 0.5_wp * e
     end function coulomb_energy
 
-    !> Potentiel atomique : V_A = Σ_B γ_AB Δq_B
     subroutine coulomb_potential(gamma, dq, V)
         real(wp), intent(in)  :: gamma(:,:), dq(:)
         real(wp), intent(out) :: V(:)

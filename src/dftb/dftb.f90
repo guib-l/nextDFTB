@@ -1,7 +1,7 @@
-!> nextDFTB — façade publique du module de calcul DFTB.
+!> Façade publique du calculateur DFTB.
 !>
-!> Interface publique (et SEULE) :
-!>   - subroutine init(geom, basis, calc)
+!> Expose EXACTEMENT l'interface suivante :
+!>   - subroutine init(geometry, basis)
 !>   - subroutine execute(dograd)
 !>   - function get_total_energy()
 !>   - function get_repulsive_energy()
@@ -9,31 +9,33 @@
 !>   - function get_band_energy()
 !>   - function get_gradient()
 !>   - function get_charges()
+!>
+!> Aucune autre méthode publique. Le module conserve en interne le
+!> dernier état du calcul (`dftbstate_t`).
 module dftb
-    use kinds,        only: wp
-    use globals,      only: geometry_t, basis_t, calc_t, basis_system_t
-    use readskf,      only: skf_store_t, load_skf_store
-    use dftb_matrix,  only: build_basis_system
-    use scc,          only: scc_result_t, solve_scc
-    use repulsif,     only: repulsive_energy
-    use coulomb,      only: coulomb_energy
-    use dftb_grad,    only: zero_gradient
-    use errors,       only: fatal
+    use kinds,         only: wp
+    use structure_mod, only: structure_t
+    use parse_input,   only: basis_t, calc_t
+    use dftbstate,     only: dftbstate_t
+    use skf,           only: skf_init       => init,            &
+                              skf_readslako  => readslako,       &
+                              skf_build_rep  => build_repulsion, &
+                              skf_build_elec => build_electronic
+    use matel,         only: build_basis_system
+    use scc,           only: solve_scc
+    use repulsif,      only: repulsive_energy
+    use coulomb,       only: coulomb_energy
+    use dftb_energy,   only: total_energy
+    use dftb_grad,     only: zero_gradient
+    use errors,        only: fatal
     implicit none
     private
 
-    type(geometry_t),     save :: g_geom
-    type(basis_t),        save :: g_basis_in
-    type(calc_t),         save :: g_calc
-    type(basis_system_t), save :: g_bas
-    type(skf_store_t),    save :: g_store
-    type(scc_result_t),   save :: g_res
-    real(wp), allocatable, save :: g_grad(:,:)
-    real(wp), save :: g_e_total = 0.0_wp
-    real(wp), save :: g_e_band  = 0.0_wp
-    real(wp), save :: g_e_coul  = 0.0_wp
-    real(wp), save :: g_e_rep   = 0.0_wp
-    logical, save  :: g_init    = .false.
+    type(structure_t),       save :: g_struct
+    type(basis_t),           save :: g_basis
+    type(calc_t),            save :: g_calc
+    type(dftbstate_t),       save :: g_state
+    logical, save :: g_init = .false.
 
     public :: init, execute
     public :: get_total_energy, get_repulsive_energy, get_coulomb_energy
@@ -41,24 +43,25 @@ module dftb
 
 contains
 
-    subroutine init(geom, basis, calcul)
-        type(geometry_t), intent(in) :: geom
-        type(basis_t),    intent(in) :: basis
-        type(calc_t),     intent(in) :: calcul
+    subroutine init(geometry, basis_in, calcul)
+        type(structure_t), intent(in) :: geometry
+        type(basis_t),     intent(in) :: basis_in
+        type(calc_t),      intent(in) :: calcul
 
-        character(len=4), allocatable :: sym_table(:)
+        g_struct = geometry
+        g_basis  = basis_in
+        g_calc   = calcul
 
-        g_geom     = geom
-        g_basis_in = basis
-        g_calc     = calcul
+        call skf_init(geometry, basis_in)
+        call skf_readslako()
+        call skf_build_rep()
+        call skf_build_elec()
 
-        call unique_symbols(geom%symbols, sym_table)
-        call load_skf_store(sym_table, basis%src, basis%ext, basis%sep, g_store)
-        call build_basis_system(geom, g_store, sym_table, g_bas)
+        call build_basis_system(geometry, g_basis, g_state%bas)
 
-        if (allocated(g_grad)) deallocate(g_grad)
-        allocate(g_grad(3, geom%natoms))
-        g_grad = 0.0_wp
+        if (allocated(g_state%grad)) deallocate(g_state%grad)
+        allocate(g_state%grad(3, geometry%natoms))
+        g_state%grad = 0.0_wp
 
         g_init = .true.
     end subroutine init
@@ -67,89 +70,59 @@ contains
     subroutine execute(dograd)
         logical, intent(in) :: dograd
 
-        if (.not. g_init) call fatal("dftb", "execute() called before init()")
+        if (.not. g_init) call fatal("dftb", "execute called before init")
 
-        call solve_scc(g_geom, g_bas, g_store, g_calc%scc, &
-                       g_calc%maxscc, g_calc%tolscc, g_res)
+        call solve_scc(g_struct, g_calc%scc, g_calc%maxscc, g_calc%tolscc, g_state)
 
-        g_e_band = g_res%e_band
-        g_e_rep  = repulsive_energy(g_geom, g_bas, g_store)
+        g_state%e_rep = repulsive_energy(g_struct)
         if (g_calc%scc) then
-            g_e_coul = coulomb_energy(g_res%gamma, g_res%dq)
-            g_e_total = g_e_band - g_e_coul + g_e_rep
+            g_state%e_coul = coulomb_energy(g_state%gamma, g_state%dq)
         else
-            g_e_coul = 0.0_wp
-            g_e_total = g_e_band + g_e_rep
+            g_state%e_coul = 0.0_wp
         end if
+        g_state%e_total = total_energy(g_state%e_band, g_state%e_coul, g_state%e_rep)
 
+        call zero_gradient(g_state%grad)
         if (dograd) then
-            ! Gradient analytique non implémenté — on retourne 0.
-            call zero_gradient(g_grad)
-        else
-            call zero_gradient(g_grad)
+            ! Gradient analytique non implémenté.
+            continue
         end if
     end subroutine execute
 
 
     function get_total_energy() result(e)
         real(wp) :: e
-        e = g_e_total
+        e = g_state%e_total
     end function get_total_energy
 
     function get_repulsive_energy() result(e)
         real(wp) :: e
-        e = g_e_rep
+        e = g_state%e_rep
     end function get_repulsive_energy
 
     function get_coulomb_energy() result(e)
         real(wp) :: e
-        e = g_e_coul
+        e = g_state%e_coul
     end function get_coulomb_energy
 
     function get_band_energy() result(e)
         real(wp) :: e
-        e = g_e_band
+        e = g_state%e_band
     end function get_band_energy
 
     function get_gradient() result(g)
         real(wp), allocatable :: g(:,:)
-        allocate(g(3, g_geom%natoms))
-        g = g_grad
+        allocate(g(3, g_struct%natoms))
+        g = g_state%grad
     end function get_gradient
 
     function get_charges() result(q)
         real(wp), allocatable :: q(:)
-        allocate(q(g_geom%natoms))
-        if (allocated(g_res%q)) then
-            q = g_res%q
+        allocate(q(g_struct%natoms))
+        if (allocated(g_state%q)) then
+            q = g_state%q
         else
             q = 0.0_wp
         end if
     end function get_charges
-
-
-    !-- helpers --------------------------------------------------------
-
-    subroutine unique_symbols(syms, uniq)
-        character(len=*),               intent(in)  :: syms(:)
-        character(len=4), allocatable,  intent(out) :: uniq(:)
-        integer :: i, j, n
-        character(len=4) :: tmp(size(syms))
-        logical :: seen
-        n = 0
-        do i = 1, size(syms)
-            seen = .false.
-            do j = 1, n
-                if (trim(tmp(j)) == trim(syms(i))) then
-                    seen = .true.; exit
-                end if
-            end do
-            if (.not. seen) then
-                n = n + 1
-                tmp(n) = syms(i)
-            end if
-        end do
-        allocate(uniq(n))
-        uniq(1:n) = tmp(1:n)
-    end subroutine unique_symbols
 end module dftb

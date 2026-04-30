@@ -1,6 +1,6 @@
 !> Conversions d'unités courantes.
 module units
-    use kinds, only: wp
+    use kinds,     only: wp
     use constants, only: BOHR_TO_ANGSTROM, ANGSTROM_TO_BOHR, &
                          HARTREE_TO_EV, EV_TO_HARTREE
     implicit none

@@ -21,6 +21,7 @@ set(CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules)
 # Options
 # ---------------------------------------------------------------------
 option(NEXTDFTB_ENABLE_OPENMP "Enable OpenMP in compute kernels" ON)
+option(NEXTDFTB_ENABLE_TESTS  "Build unit tests in test/"        ON)
 
 # ---------------------------------------------------------------------
 # Fortran flags (enforce Fortran 2018; CMAKE_Fortran_STANDARD needs 3.28)
@@ -52,6 +53,11 @@ endif()
 # Executable
 # ---------------------------------------------------------------------
 add_subdirectory(src)
+
+if(NEXTDFTB_ENABLE_TESTS)
+    enable_testing()
+    add_subdirectory(test)
+endif()
 
 # ---------------------------------------------------------------------
 # Summary

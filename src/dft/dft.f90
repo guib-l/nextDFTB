@@ -1,4 +1,4 @@
-!> Module DFT — placeholder.
+!> Calculateur DFT (placeholder, non implémenté).
 module dft
     implicit none
     private

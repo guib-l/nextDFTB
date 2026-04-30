@@ -1,10 +1,7 @@
-!> Interpolation des paramètres SKF.
-!>
-!> - hs_at_r(skf, r, h, s) : H/S aux 10 intégrales de Slater-Koster à distance r
-!> - vrep_at_r(skf, r) : énergie répulsive à r (polynôme exponentiel + spline)
+!> Interpolation des paramètres SKF (table H/S et énergie répulsive).
 module interp
-    use kinds,   only: wp
-    use readskf, only: skf_t, SKF_NCOL
+    use kinds,  only: wp
+    use slakos, only: skf_t
     implicit none
     private
 
@@ -12,8 +9,10 @@ module interp
 
 contains
 
-    !> Renvoie h(1:10) et s(1:10) (10 intégrales SK) interpolées à r.
-    !> Retourne 0 si r >= (ngrid-1)*dr.
+    !> Renvoie h(1:10) et s(1:10) interpolés linéairement à r (en bohr).
+    !> Convention SKF (DFTB+) :
+    !>   1=ddσ 2=ddπ 3=ddδ 4=pdσ 5=pdπ 6=ppσ 7=ppπ 8=sdσ 9=spσ 10=ssσ
+    !> Retourne 0 si r est hors-grille.
     subroutine hs_at_r(skf, r, h, s)
         type(skf_t), intent(in)  :: skf
         real(wp),    intent(in)  :: r
@@ -35,8 +34,8 @@ contains
 
 
     !> Énergie répulsive paramétrée par le SKF.
-    !> Si spline disponible : utilise (exp + segments).
-    !> Sinon : polynôme c2(r-rcut)^2 + ... + c9(r-rcut)^9 pour r < rcut.
+    !> Si spline disponible, utilise (exp + segments). Sinon : polynôme
+    !> c2(r-rcut)^2 + ... + c9(r-rcut)^9 pour r < rcut.
     function vrep_at_r(skf, r) result(v)
         type(skf_t), intent(in) :: skf
         real(wp),    intent(in) :: r
@@ -49,7 +48,6 @@ contains
             if (r >= skf%spline_cutoff) return
             if (allocated(skf%segs)) then
                 if (r < skf%segs(1)%r1) then
-                    ! région exponentielle
                     v = exp(-skf%spline_a1 * r + skf%spline_a2) + skf%spline_a3
                     return
                 end if
@@ -64,16 +62,17 @@ contains
         else
             if (r >= skf%rcut) return
             dr_ = r - skf%rcut
-            v =        skf%c_poly(2) * dr_**2 &
-                    + skf%c_poly(3) * dr_**3 &
-                    + skf%c_poly(4) * dr_**4 &
-                    + skf%c_poly(5) * dr_**5 &
-                    + skf%c_poly(6) * dr_**6 &
-                    + skf%c_poly(7) * dr_**7 &
-                    + skf%c_poly(8) * dr_**8 &
-                    + skf%c_poly(9) * dr_**9
+            v =   skf%c_poly(2) * dr_**2 &
+                + skf%c_poly(3) * dr_**3 &
+                + skf%c_poly(4) * dr_**4 &
+                + skf%c_poly(5) * dr_**5 &
+                + skf%c_poly(6) * dr_**6 &
+                + skf%c_poly(7) * dr_**7 &
+                + skf%c_poly(8) * dr_**8 &
+                + skf%c_poly(9) * dr_**9
         end if
     end function vrep_at_r
+
 
     pure function poly_eval(c, ord, x) result(y)
         real(wp), intent(in) :: c(0:5), x

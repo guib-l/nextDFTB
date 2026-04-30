@@ -1,10 +1,8 @@
-!> Calcul du gradient DFTB.
+!> Gradient DFTB.
 !>
-!> NOTE : le gradient analytique requiert les dérivées de H, S, γ et de la
-!> répulsion par rapport aux coordonnées. Pour rester minimal et correct,
-!> ce module fournit pour l'instant uniquement la signature et un calcul
-!> par différence finie centrée (utilisable mais coûteux). Une version
-!> analytique pourra être ajoutée ultérieurement.
+!> Le gradient analytique requiert les dérivées de H, S, γ et de la
+!> répulsion. Pour rester minimal, ce module se contente de fournir un
+!> placeholder retournant un gradient nul (à substituer ultérieurement).
 module dftb_grad
     use kinds, only: wp
     implicit none
@@ -14,7 +12,6 @@ module dftb_grad
 
 contains
 
-    !> Initialise un gradient à zéro (placeholder utilisable par dograd=.false.).
     subroutine zero_gradient(grad)
         real(wp), intent(out) :: grad(:,:)
         grad = 0.0_wp

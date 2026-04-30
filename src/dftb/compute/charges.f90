@@ -1,9 +1,9 @@
 !> Calcul des charges Mulliken par atome.
 !>
-!>     q_A = Σ_{μ ∈ A} Σ_ν P_{μν} S_{νμ}
+!>   q_A = Σ_{μ ∈ A} Σ_ν P_{μν} S_{νμ}
 module charges
-    use kinds,   only: wp
-    use globals, only: basis_system_t
+    use kinds,     only: wp
+    use dftbstate, only: basis_system_t
     implicit none
     private
 
@@ -32,7 +32,6 @@ contains
         end do
     end subroutine mulliken_charges
 
-    !> Δq_A = q_A - q_A^{neutre}
     subroutine delta_charges(q, bas, dq)
         real(wp),             intent(in)  :: q(:)
         type(basis_system_t), intent(in)  :: bas

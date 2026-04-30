@@ -1,4 +1,4 @@
-!> Polarisation — placeholder.
+!> Module de polarisation DFTB (placeholder, non implémenté).
 module pola
     implicit none
     private
