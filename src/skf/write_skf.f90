@@ -4,12 +4,24 @@
 !> nombre de paires).
 module write_skf
     use kinds,        only: wp
+    use constants,    only: SYMBOL_LEN
     use slakos,       only: skf_store_t
     use write_output, only: section, line
+    use output_base,  only: output_base_t
     implicit none
     private
 
     public :: write_skf_summary
+
+    !> Objet de sortie SKF. Stocke la liste des symboles et le magasin
+    !> à écrire. `write_result` délègue à `write_skf_summary`.
+    type, extends(output_base_t), public :: output_skf_t
+        character(len=SYMBOL_LEN), allocatable :: symbols(:)
+        type(skf_store_t)                      :: store
+    contains
+        procedure :: write_process => skf_write_process
+        procedure :: write_result  => skf_write_result
+    end type output_skf_t
 
 contains
 
@@ -28,4 +40,18 @@ contains
             call line(buf)
         end do
     end subroutine write_skf_summary
+
+
+    !-- output_skf_t (impl. de output_base_t) --------------------------
+
+    subroutine skf_write_process(self)
+        class(output_skf_t), intent(inout) :: self
+        if (self%verbose >= 2) call section("SKF process")
+    end subroutine skf_write_process
+
+    subroutine skf_write_result(self)
+        class(output_skf_t), intent(inout) :: self
+        if (.not. allocated(self%symbols)) return
+        call write_skf_summary(self%symbols, self%store)
+    end subroutine skf_write_result
 end module write_skf

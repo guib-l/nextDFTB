@@ -2,53 +2,16 @@
 !>
 !> Format générique : sections SECTION = { ... } contenant soit
 !> des assignations KEY = VALUE, soit des sous-sections SECTION = { ... }.
-!> Le module définit aussi les types de configuration (basis, calc,
-!> output, input) qui sont remplis à la lecture.
+!> Le parser remplit un `input_kw_t` (défini dans `keywords`) avec les
+!> objets typés correspondant à chaque balise. Les valeurs par défaut
+!> sont portées par les déclarations de ces objets.
 module parse_input
     use kinds,    only: wp
-    use constants, only: PATH_LEN, SYMBOL_LEN
-    use defaults, only: DEFAULT_GEO, DEFAULT_EXT, DEFAULT_SEP, DEFAULT_SRC, &
-                        DEFAULT_TYPE, DEFAULT_OUT, DEFAULT_LOG, DEFAULT_LOG_ON, &
-                        DEFAULT_MAXSCC, DEFAULT_TOLSCC, DEFAULT_SCC
+    use property, only: property_basis_t, orbital_spec_t
     use keywords
     use errors,   only: fatal, warn
     implicit none
     private
-
-    type, public :: orbital_spec_t
-        character(len=SYMBOL_LEN) :: symbol = ""
-        character(len=64)         :: orbitals = ""    ! ex: "1s 2s"
-    end type orbital_spec_t
-
-    type, public :: basis_t
-        character(len=PATH_LEN) :: src  = ""
-        character(len=16)       :: ext  = ".skf"
-        character(len=4)        :: sep  = "-"
-        character(len=16)       :: type = "spd"
-        type(orbital_spec_t), allocatable :: orbitals(:)
-    end type basis_t
-
-    type, public :: calc_t
-        character(len=8) :: kind   = "DFTB"   ! DFTB | DFT | SKF
-        logical          :: scc    = .false.
-        integer          :: maxscc = 100
-        real(wp)         :: tolscc = 1.0e-5_wp
-    end type calc_t
-
-    type, public :: output_t
-        character(len=PATH_LEN) :: out    = "results.out"
-        character(len=PATH_LEN) :: log    = "logs"
-        logical                 :: log_on = .false.
-    end type output_t
-
-    type, public :: input_t
-        character(len=PATH_LEN) :: geom_file = "geometry.dat"
-        type(basis_t)           :: basis
-        type(calc_t)            :: calc
-        type(output_t)          :: out
-        logical                 :: has_driver  = .false.
-        character(len=16)       :: driver_type = "SINGLE"
-    end type input_t
 
     public :: read_input
 
@@ -56,27 +19,13 @@ contains
 
     subroutine read_input(filename, inp)
         character(len=*), intent(in)  :: filename
-        type(input_t),    intent(out) :: inp
+        type(input_kw_t), intent(out) :: inp
 
         integer :: u, ios
         character(len=512) :: raw
         character(len=:),  allocatable :: line
         character(len=64), allocatable :: stack(:)
         integer :: depth
-
-        ! Defaults
-        inp%geom_file  = DEFAULT_GEO
-        inp%basis%src  = DEFAULT_SRC
-        inp%basis%ext  = DEFAULT_EXT
-        inp%basis%sep  = DEFAULT_SEP
-        inp%basis%type = DEFAULT_TYPE
-        inp%out%out    = DEFAULT_OUT
-        inp%out%log    = DEFAULT_LOG
-        inp%out%log_on = DEFAULT_LOG_ON
-        inp%calc%scc    = DEFAULT_SCC
-        inp%calc%maxscc = DEFAULT_MAXSCC
-        inp%calc%tolscc = DEFAULT_TOLSCC
-        inp%calc%kind   = "DFTB"
 
         allocate(stack(8))
         depth = 0
@@ -122,7 +71,7 @@ contains
     subroutine dispatch_assign(stack, depth, line, inp)
         character(len=*), intent(in)    :: stack(:), line
         integer,          intent(in)    :: depth
-        type(input_t),    intent(inout) :: inp
+        type(input_kw_t), intent(inout) :: inp
         character(len=:), allocatable :: key, val
         character(len=64) :: ukey
 
@@ -139,7 +88,7 @@ contains
             select case (trim(stack(1)))
             case (KW_GEOMETRY)
                 if (trim(ukey) == KW_GEO) then
-                    inp%geom_file = unquote(val)
+                    inp%geometry%geo = unquote(val)
                 else
                     call warn("parse_input", "unknown GEOMETRY key: "//trim(key))
                 end if
@@ -154,21 +103,21 @@ contains
                 end select
             case (KW_OUTPUT)
                 select case (trim(ukey))
-                case (KW_OUT); inp%out%out = unquote(val)
+                case (KW_OUT); inp%output%out = unquote(val)
                 case (KW_LOG)
                     if (is_bool(val)) then
-                        inp%out%log_on = bool_value(val)
+                        inp%output%log_on = bool_value(val)
                     else
-                        inp%out%log    = unquote(val)
-                        inp%out%log_on = .true.
+                        inp%output%log    = unquote(val)
+                        inp%output%log_on = .true.
                     end if
                 case default
                     call warn("parse_input", "unknown OUTPUT key: "//trim(key))
                 end select
             case (KW_DRIVER)
                 if (trim(ukey) == KW_DRV_TYPE) then
-                    inp%driver_type = upper(unquote(val))
-                    inp%has_driver  = .true.
+                    inp%driver%type       = upper(unquote(val))
+                    inp%driver%has_driver = .true.
                 else
                     call warn("parse_input", "unknown DRIVER key: "//trim(key))
                 end if
@@ -180,9 +129,9 @@ contains
             if (trim(stack(1)) == KW_CALC .and. trim(stack(2)) == KW_DFTB) then
                 inp%calc%kind = "DFTB"
                 select case (trim(ukey))
-                case (KW_SCC);    inp%calc%scc    = bool_value(val)
-                case (KW_MAXSCC); read(val, *) inp%calc%maxscc
-                case (KW_TOLSCC); read(val, *) inp%calc%tolscc
+                case (KW_SCC);    inp%calc%dftb%scc    = bool_value(val)
+                case (KW_MAXSCC); read(val, *) inp%calc%dftb%maxscc
+                case (KW_TOLSCC); read(val, *) inp%calc%dftb%tolscc
                 case default
                     call warn("parse_input", "unknown CALC.DFTB key: "//trim(key))
                 end select
@@ -198,8 +147,8 @@ contains
 
 
     subroutine append_orbital(basis, sym, orbs)
-        type(basis_t),    intent(inout) :: basis
-        character(len=*), intent(in)    :: sym, orbs
+        type(property_basis_t), intent(inout) :: basis
+        character(len=*),       intent(in)    :: sym, orbs
         type(orbital_spec_t), allocatable :: tmp(:)
         integer :: n
         n = 0

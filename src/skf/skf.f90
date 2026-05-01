@@ -16,11 +16,13 @@ module skf
     use kinds,         only: wp
     use constants,     only: SYMBOL_LEN
     use structure_mod, only: structure_t
-    use parse_input,   only: basis_t
+    use property,      only: property_basis_t
+    use method_basis,  only: method_basis_t
     use slakos,        only: skf_store_t
     use readskf,       only: load_skf_store
     use electronic,    only: hs_pair_integrals, binding_idx
     use repulsive_skf, only: pair_repulsive
+    use write_skf,     only: write_skf_summary
     use errors,        only: fatal
     implicit none
     private
@@ -35,13 +37,28 @@ module skf
     public :: build_repulsion, build_electronic
     public :: get_repulsive, get_overlaps, get_hamiltonian
     public :: get_hubbard, get_eps, get_occupations
+    public :: get_mass
     public :: nelements, element_symbol, element_index
+    public :: write_summary
+
+    !> Calculateur SKF — extension de l'interface abstraite method_basis.
+    !> Délègue intégralement aux procédures de module pour préserver
+    !> l'API existante (utilisée par matel et dftb).
+    type, extends(method_basis_t), public :: skf_calc_t
+        logical :: initialized = .false.
+        logical :: built       = .false.
+    contains
+        procedure :: init         => skf_calc_init
+        procedure :: build        => skf_calc_build
+        procedure :: execute      => skf_calc_execute
+        procedure :: write_output => skf_calc_write_output
+    end type skf_calc_t
 
 contains
 
     subroutine init(struct, basis)
-        type(structure_t), intent(in) :: struct
-        type(basis_t),     intent(in) :: basis
+        type(structure_t),      intent(in) :: struct
+        type(property_basis_t), intent(in) :: basis
         integer :: i
 
         call unique_symbols(struct, sym_table)
@@ -159,6 +176,56 @@ contains
         ia = element_index(atom_A)
         occ = store%pair(ia, ia)%occ
     end function get_occupations
+
+
+    !> Masse atomique de l'élément (unités du fichier SKF homonucléaire, u.m.a.).
+    function get_mass(atom_A) result(m)
+        character(len=*), intent(in) :: atom_A
+        real(wp) :: m
+        integer  :: ia
+        ia = element_index(atom_A)
+        m = store%pair(ia, ia)%mass
+    end function get_mass
+
+
+    !> Résumé du magasin SKF (éléments chargés, paires).
+    subroutine write_summary()
+        if (.not. is_loaded) return
+        call write_skf_summary(sym_table, store)
+    end subroutine write_summary
+
+
+    !-- Type-bound procedures de skf_calc_t ----------------------------
+
+    subroutine skf_calc_init(self, struct, basis)
+        class(skf_calc_t),      intent(inout) :: self
+        type(structure_t),      intent(in)    :: struct
+        type(property_basis_t), intent(in)    :: basis
+        call init(struct, basis)
+        self%initialized = .true.
+        self%built       = .false.
+    end subroutine skf_calc_init
+
+    subroutine skf_calc_build(self)
+        class(skf_calc_t), intent(inout) :: self
+        if (.not. self%initialized) call fatal("skf", "build before init")
+        call readslako()
+        call build_repulsion()
+        call build_electronic()
+        self%built = .true.
+    end subroutine skf_calc_build
+
+    subroutine skf_calc_execute(self)
+        class(skf_calc_t), intent(inout) :: self
+        if (.not. self%built) call fatal("skf", "execute before build")
+        ! Les intégrales sont interpolées à la demande ; rien à exécuter
+        ! ici. Conservé pour la conformité à l'interface method_basis.
+    end subroutine skf_calc_execute
+
+    subroutine skf_calc_write_output(self)
+        class(skf_calc_t), intent(inout) :: self
+        call write_summary()
+    end subroutine skf_calc_write_output
 
 
     !-- helpers internes (visibles aux autres modules pour itérer la table) -

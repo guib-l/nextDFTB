@@ -5,7 +5,7 @@
 module driver
     use kinds,           only: wp
     use structure_mod,   only: structure_t
-    use parse_input,     only: input_t
+    use keywords,        only: input_kw_t
     use single_point,    only: run_single_point
     use write_output,    only: open_output, close_output, &
                                 write_header, write_footer, write_timings
@@ -24,14 +24,14 @@ contains
 
     subroutine run_default(struct, inp)
         type(structure_t), intent(in) :: struct
-        type(input_t),     intent(in) :: inp
+        type(input_kw_t),  intent(in) :: inp
         type(timer_t) :: t_total
 
         call timer_reset()
         call tic(t_total)
 
-        if (inp%out%log_on) call log_open(trim(inp%out%log))
-        call open_output(trim(inp%out%out))
+        if (inp%output%log_on) call log_open(trim(inp%output%log))
+        call open_output(trim(inp%output%out))
         call write_header(PROG_TITLE, PROG_VERSION)
 
         select case (trim(inp%calc%kind))

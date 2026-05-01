@@ -8,8 +8,6 @@ Le code lit un fichier `input.dat` décrivant le calcul et un fichier
 `geometry.dat` (format xyz étendu), puis exécute le calculateur correspondant
 (DFTB ou SKF).
 
-Voir [`PLAN.md`](PLAN.md) pour la spécification complète.
-
 ## Architecture
 
 ```
@@ -30,9 +28,10 @@ geometry.dat
 
 ```
 src/
-├── base/         kind, constants, units, default, atoms, molecule, structure, globals
+├── base/         kind, constants, units, atoms, molecule, structure, globals,
+│                 method_basis, method_calc
 ├── dftb/
-│   ├── build/    matel, gamma, density, skrot
+│   ├── core/     matel, gamma, density, skrot
 │   ├── compute/  dftb_energy, dftb_grad, coulomb, charges
 │   ├── solver/   scc, mixer (simple/Broyden), linalg
 │   ├── repulsif/ repulsif
@@ -41,14 +40,14 @@ src/
 │   ├── write_dftb.f90      sortie spécialisée DFTB
 │   └── dftb.f90            façade publique unique
 ├── skf/          skf, readskf, interp, electronic, repulsive, slakos, write_skf
-├── dft/          dft.f90 (placeholder)
+├── dft/          dft.f90, write_dft.f90 (placeholders)
 ├── driver/
 │   ├── driver.f90, single_point.f90
 │   └── opt/, md/           (placeholders)
-├── parser/       parse_input, parse_geometry, keywords
+├── parser/       parse_input, parse_geometry, keywords, property
 ├── utils/
 │   ├── logger/   timer, logger
-│   └── output/   write_output, write_matrix
+│   └── output/   output_base, write_output, write_matrix
 ├── errors/       errors (gestion centralisée)
 ├── cli.f90       CLI minimaliste
 └── main.f90      entrée principale
@@ -152,8 +151,6 @@ Deux fichiers sont nécessaires :
 | `DRIVER`    | `TYPE`     | `SINGLE`        | Type de driver                          |
 | `OUTPUT`    | `OUT`      | `results.out`   | Fichier de sortie                       |
 | `OUTPUT`    | `LOG`      | (désactivé)     | Fichier de log                          |
-
-Spécification complète : voir [`PLAN.md`](PLAN.md).
 
 ### Exemple — `input.dat`
 

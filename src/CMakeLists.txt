@@ -4,11 +4,12 @@ add_executable(nextdftb
     base/kind.f90
     base/constants.f90
     base/units.f90
-    base/default.f90
     base/atoms.f90
     base/molecule.f90
     base/structure.f90
     base/globals.f90
+    base/method_calc.f90
+    base/method_basis.f90
 
     errors/errors.f90
 
@@ -16,7 +17,9 @@ add_executable(nextdftb
     utils/logger/logger.f90
     utils/output/write_output.f90
     utils/output/write_matrix.f90
+    utils/output/output_base.f90
 
+    parser/property.f90
     parser/keywords.f90
     parser/parse_input.f90
     parser/parse_geometry.f90
@@ -31,10 +34,10 @@ add_executable(nextdftb
 
     dftb/dftbstate.f90
     dftb/write_dftb.f90
-    dftb/build/skrot.f90
-    dftb/build/matel.f90
-    dftb/build/gamma.f90
-    dftb/build/density.f90
+    dftb/core/skrot.f90
+    dftb/core/matel.f90
+    dftb/core/gamma.f90
+    dftb/core/density.f90
     dftb/compute/coulomb.f90
     dftb/compute/charges.f90
     dftb/compute/dftb_energy.f90
@@ -48,6 +51,7 @@ add_executable(nextdftb
     dftb/dftb.f90
 
     dft/dft.f90
+    dft/write_dft.f90
 
     driver/opt/opt.f90
     driver/md/md.f90

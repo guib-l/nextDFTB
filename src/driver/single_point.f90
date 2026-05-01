@@ -1,21 +1,22 @@
-!> Driver simple-point : appelle le calculateur DFTB en passant par
-!> sa seule API publique. Écrit le rappel des propriétés du calcul,
-!> laisse le calculateur produire sa sortie SCF, puis écrit le résultat
-!> final via write_dftb. Les phases sont chronométrées.
+!> Driver simple-point : agnostique du calculateur concret.
+!>
+!> Sélectionne le calculateur concret en fonction de `inp%calc%kind`,
+!> puis n'appelle que les méthodes garanties par l'interface abstraite
+!> `method_calc_t` (init, build, execute, get_total_energy,
+!> get_total_gradient, write_output).
 module single_point
     use kinds,         only: wp
     use structure_mod, only: structure_t
-    use parse_input,   only: input_t
-    use dftb,          only: dftb_init       => init,             &
-                              dftb_exec       => execute,          &
-                              get_total_energy, get_repulsive_energy, &
-                              get_coulomb_energy, get_band_energy, &
-                              get_charges
+    use keywords,      only: input_kw_t
+    use property,      only: property_method_t
+    use method_calc,   only: method_calc_t
+    use dftb,          only: dftb_calc_t
+    use dft,           only: dft_calc_t
     use write_output,  only: section, subsection, line, &
                              kv_str, kv_int, kv_real, kv_real_es, kv_log
-    use write_dftb,    only: write_dftb_final
     use timer,         only: timer_t, tic, toc, timer_record
     use units,         only: bohr_to_ang
+    use errors,        only: fatal
     implicit none
     private
 
@@ -25,23 +26,17 @@ contains
 
     subroutine run_single_point(struct, inp)
         type(structure_t), intent(in) :: struct
-        type(input_t),     intent(in) :: inp
+        type(input_kw_t),  intent(in) :: inp
 
-        real(wp) :: e_tot, e_band, e_coul, e_rep
-        real(wp), allocatable :: q(:)
+        class(method_calc_t),     allocatable :: calc
+        class(property_method_t), allocatable :: prop
         type(timer_t) :: t_init, t_exec
         character(len=128) :: buf
         integer :: i
 
-        !-- Rappel des propriétés du calcul ----------------------------
         call section("Calculation properties")
-        call kv_str("driver",    "single_point")
+        call kv_str("driver",     "single_point")
         call kv_str("calculator", trim(inp%calc%kind))
-        call kv_log("scc",       inp%calc%scc)
-        if (inp%calc%scc) then
-            call kv_int("max_scc",   inp%calc%maxscc)
-            call kv_real_es("tol_scc", inp%calc%tolscc)
-        end if
 
         call subsection("Geometry")
         call kv_int("natoms", struct%natoms)
@@ -62,24 +57,30 @@ contains
         call kv_str("sep",  trim(inp%basis%sep))
         call kv_str("type", trim(inp%basis%type))
 
-        !-- Initialisation du calculateur ------------------------------
+        !-- Sélection du calculateur concret ---------------------------
+        select case (trim(inp%calc%kind))
+        case ("DFTB")
+            allocate(dftb_calc_t :: calc)
+            allocate(prop, source=inp%calc%dftb)
+        case ("DFT")
+            allocate(dft_calc_t :: calc)
+            allocate(prop, source=inp%calc%dft)
+        case default
+            call fatal("single_point", "unsupported calc kind: "//trim(inp%calc%kind))
+        end select
+
+        !-- Pipeline générique : init → build → execute → write --------
         call tic(t_init)
-        call dftb_init(struct, inp%basis, inp%calc)
+        call calc%init(struct, inp%basis, prop)
+        call calc%build()
         call toc(t_init)
-        call timer_record("dftb_init", t_init)
+        call timer_record("calc_init_build", t_init)
 
-        !-- Exécution (le calculateur écrit la boucle SCF) -------------
         call tic(t_exec)
-        call dftb_exec(.false.)
+        call calc%execute()
         call toc(t_exec)
-        call timer_record("dftb_execute", t_exec)
+        call timer_record("calc_execute", t_exec)
 
-        e_tot  = get_total_energy()
-        e_band = get_band_energy()
-        e_coul = get_coulomb_energy()
-        e_rep  = get_repulsive_energy()
-        q      = get_charges()
-
-        call write_dftb_final(e_tot, e_band, e_coul, e_rep, q)
+        call calc%write_output()
     end subroutine run_single_point
 end module single_point

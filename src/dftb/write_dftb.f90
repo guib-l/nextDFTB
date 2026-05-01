@@ -10,11 +10,25 @@ module write_dftb
     use write_output, only: section, subsection, line, &
                             kv_int, kv_log, kv_real, kv_real_es, &
                             output_unit_id, output_is_open
+    use output_base,  only: output_base_t
     implicit none
     private
 
     public :: write_dftb_scc_header, write_dftb_scc_iter
     public :: write_dftb_scc_status, write_dftb_final
+
+    !> Objet de sortie DFTB. Stocke les résultats essentiels et délègue
+    !> à `write_dftb_final` pour l'écriture finale.
+    type, extends(output_base_t), public :: output_dftb_t
+        real(wp)              :: e_total = 0.0_wp
+        real(wp)              :: e_band  = 0.0_wp
+        real(wp)              :: e_coul  = 0.0_wp
+        real(wp)              :: e_rep   = 0.0_wp
+        real(wp), allocatable :: charges(:)
+    contains
+        procedure :: write_process => dftb_write_process
+        procedure :: write_result  => dftb_write_result
+    end type output_dftb_t
 
 contains
 
@@ -71,4 +85,24 @@ contains
             call line(buf)
         end do
     end subroutine write_dftb_final
+
+
+    !-- output_dftb_t (impl. de output_base_t) -------------------------
+
+    subroutine dftb_write_process(self)
+        class(output_dftb_t), intent(inout) :: self
+        if (self%verbose >= 2) call section("DFTB process")
+    end subroutine dftb_write_process
+
+    subroutine dftb_write_result(self)
+        class(output_dftb_t), intent(inout) :: self
+        real(wp), allocatable :: q(:)
+        if (allocated(self%charges)) then
+            q = self%charges
+        else
+            allocate(q(0))
+        end if
+        call write_dftb_final(self%e_total, self%e_band, self%e_coul, &
+                              self%e_rep, q)
+    end subroutine dftb_write_result
 end module write_dftb

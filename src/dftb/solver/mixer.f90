@@ -1,14 +1,16 @@
 !> Mixer de charges : simple (linéaire) et historique de type Anderson.
 module mixer
-    use kinds,    only: wp
-    use defaults, only: DEFAULT_MIX_ALPHA, DEFAULT_BROYDEN_HISTORY
+    use kinds, only: wp
     implicit none
     private
 
+    real(wp), parameter :: DEFAULT_MIX_ALPHA       = 0.2_wp
+    integer,  parameter :: DEFAULT_BROYDEN_HISTORY = 6
+
     type, public :: mixer_t
         integer  :: kind     = 0           ! 0 = simple, 1 = anderson/broyden
-        real(wp) :: alpha    = 0.2_wp
-        integer  :: hist_max = 6
+        real(wp) :: alpha    = DEFAULT_MIX_ALPHA
+        integer  :: hist_max = DEFAULT_BROYDEN_HISTORY
         integer  :: it       = 0
         real(wp), allocatable :: dF(:,:)
         real(wp), allocatable :: dx(:,:)
