@@ -38,6 +38,7 @@ module keywords
     character(len=*), parameter, public :: KW_SCC    = "SCC"
     character(len=*), parameter, public :: KW_MAXSCC = "MAXSCC"
     character(len=*), parameter, public :: KW_TOLSCC = "TOLSCC"
+    character(len=*), parameter, public :: KW_WRITE_MATRIX = "WRITE_MATRIX"
     ! DRIVER
     character(len=*), parameter, public :: KW_DRV_TYPE = "TYPE"
     ! OUTPUT

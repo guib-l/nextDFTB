@@ -30,6 +30,7 @@ module structure_mod
         procedure :: get_dist      => structure_get_dist
         procedure :: set_dist_mol  => structure_set_dist_mol
         procedure :: get_dist_mol  => structure_get_dist_mol
+        procedure :: initialize    => structure_initialize
     end type structure_t
 
     public :: structure_init, structure_set_atom
@@ -144,4 +145,12 @@ contains
         real(wp) :: d
         d = self%dist_mol(index_1, index_2)
     end function structure_get_dist_mol
+
+    subroutine structure_initialize(self)
+        class(structure_t), intent(inout) :: self
+        call self%set_com()
+        call self%set_com_mol()
+        call self%set_dist()
+        call self%set_dist_mol()
+    end subroutine structure_initialize
 end module structure_mod

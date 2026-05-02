@@ -22,7 +22,7 @@ module scc
     use coulomb,       only: coulomb_potential
     use mixer,         only: mixer_t, init_mixer, free_mixer, mix_charges
     use write_dftb,    only: write_dftb_scc_header, write_dftb_scc_iter, &
-                              write_dftb_scc_status
+                              write_dftb_scc_status, write_dftb_matrices
     implicit none
     private
 
@@ -30,11 +30,12 @@ module scc
 
 contains
 
-    subroutine solve_scc(struct, do_scc, maxit, tol, st)
+    subroutine solve_scc(struct, do_scc, maxit, tol, write_matrix, st)
         type(structure_t),  intent(in)    :: struct
         logical,            intent(in)    :: do_scc
         integer,            intent(in)    :: maxit
         real(wp),           intent(in)    :: tol
+        logical,            intent(in)    :: write_matrix
         type(dftbstate_t),  intent(inout) :: st
 
         integer  :: norb, natoms, it, mu, nu, ia, ib
@@ -90,6 +91,8 @@ contains
             call build_density(st%C, st%occ, st%P)
             call mulliken_charges(st%P, st%S, st%bas, st%q)
             call delta_charges(st%q, st%bas, dq_new)
+
+            if (write_matrix) call write_dftb_matrices(H0, st%S, st%P, st%C)
 
             st%e_band = sum(st%occ * st%eig)
 

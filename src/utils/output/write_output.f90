@@ -5,12 +5,10 @@
 !>   1. write_header(title)        — bannière + date/heure
 !>   2. section/subsection + kv_*  — propriétés du calcul, état
 !>   3. (sortie spécifique au calculateur via write_dftb / write_skf)
-!>   4. write_timings              — temps d'exécution
-!>   5. write_footer               — clôture
+!>   4. write_footer               — clôture
 module write_output
     use, intrinsic :: iso_fortran_env, only: output_unit
     use kinds,  only: wp
-    use timer,  only: timer_count, timer_get
     implicit none
     private
 
@@ -20,7 +18,7 @@ module write_output
     public :: open_output, close_output, output_unit_id, output_is_open
     public :: banner, section, subsection, line
     public :: kv_str, kv_int, kv_real, kv_real_es, kv_log
-    public :: write_header, write_footer, write_timings
+    public :: write_header, write_footer
 
 contains
 
@@ -135,20 +133,6 @@ contains
         call kv_str("version", version)
         call kv_str("started", trim(stamp))
     end subroutine write_header
-
-    subroutine write_timings()
-        integer :: i, n
-        character(len=32) :: name
-        real(wp) :: dt
-        if (.not. out_open) return
-        n = timer_count()
-        if (n <= 0) return
-        call section("Execution timings (s)")
-        do i = 1, n
-            call timer_get(i, name, dt)
-            write(out_unit, '(a,a,f14.6)') "  ", pad22(trim(name)), dt
-        end do
-    end subroutine write_timings
 
     subroutine write_footer()
         character(len=8)  :: date

@@ -10,12 +10,14 @@ module write_dftb
     use write_output, only: section, subsection, line, &
                             kv_int, kv_log, kv_real, kv_real_es, &
                             output_unit_id, output_is_open
+    use write_matrix, only: print_matrix
     use output_base,  only: output_base_t
     implicit none
     private
 
     public :: write_dftb_scc_header, write_dftb_scc_iter
     public :: write_dftb_scc_status, write_dftb_final
+    public :: write_dftb_matrices
 
     !> Objet de sortie DFTB. Stocke les résultats essentiels et délègue
     !> à `write_dftb_final` pour l'écriture finale.
@@ -85,6 +87,40 @@ contains
             call line(buf)
         end do
     end subroutine write_dftb_final
+
+
+    subroutine write_dftb_matrices(H, S, P, C)
+        real(wp), intent(in) :: H(:,:), S(:,:), P(:,:), C(:,:)
+        integer :: u, ios
+
+        open(newunit=u, file="hamiltonian.dat", status='replace', &
+             action='write', iostat=ios)
+        if (ios == 0) then
+            call print_matrix(u, "H0", H)
+            close(u)
+        end if
+
+        open(newunit=u, file="overlaps.dat", status='replace', &
+             action='write', iostat=ios)
+        if (ios == 0) then
+            call print_matrix(u, "S", S)
+            close(u)
+        end if
+
+        open(newunit=u, file="density.dat", status='replace', &
+             action='write', iostat=ios)
+        if (ios == 0) then
+            call print_matrix(u, "P", P)
+            close(u)
+        end if
+
+        open(newunit=u, file="coeff.dat", status='replace', &
+             action='write', iostat=ios)
+        if (ios == 0) then
+            call print_matrix(u, "C", C)
+            close(u)
+        end if
+    end subroutine write_dftb_matrices
 
 
     !-- output_dftb_t (impl. de output_base_t) -------------------------

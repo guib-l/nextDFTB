@@ -187,7 +187,7 @@ contains
         real(wp),             intent(out) :: H(:,:), S(:,:)
 
         integer :: i, j, ei, oi, oj, ni, nj, mu, nu
-        real(wp) :: dx, dy, dz, r, dir(3)
+        real(wp) :: r, dir(3)
         real(wp) :: hblk(4,4), sblk(4,4)
         real(wp), allocatable :: h_ab(:), s_ab(:), h_ba(:), s_ba(:)
         character(len=SYMBOL_LEN) :: sym_i, sym_j
@@ -218,12 +218,9 @@ contains
                 oi = bas%atom_orb_start(i); oj = bas%atom_orb_start(j)
                 ni = bas%atom_norb(i);      nj = bas%atom_norb(j)
 
-                dx = struct%atoms(j)%position(1) - struct%atoms(i)%position(1)
-                dy = struct%atoms(j)%position(2) - struct%atoms(i)%position(2)
-                dz = struct%atoms(j)%position(3) - struct%atoms(i)%position(3)
-                r  = sqrt(dx*dx + dy*dy + dz*dz)
+                r = struct%dist(i, j)
                 if (r < 1.0e-8_wp) cycle
-                dir = [ dx, dy, dz ] / r
+                dir = (struct%atoms(j)%position - struct%atoms(i)%position) / r
 
                 h_ab = skf_get_hamiltonian(trim(sym_i), trim(sym_j), r)
                 s_ab = skf_get_overlaps   (trim(sym_i), trim(sym_j), r)

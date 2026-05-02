@@ -34,9 +34,10 @@ module property
 
     !> Propriétés du calculateur DFTB.
     type, extends(property_method_t), public :: property_dftb_t
-        logical  :: scc    = .false.
-        integer  :: maxscc = 100
-        real(wp) :: tolscc = 1.0e-5_wp
+        logical  :: scc          = .false.
+        integer  :: maxscc       = 100
+        real(wp) :: tolscc       = 1.0e-5_wp
+        logical  :: write_matrix = .false.
     end type property_dftb_t
 
     !> Propriétés du calculateur DFT (vide pour l'instant).

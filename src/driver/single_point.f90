@@ -14,7 +14,7 @@ module single_point
     use dft,           only: dft_calc_t
     use write_output,  only: section, subsection, line, &
                              kv_str, kv_int, kv_real, kv_real_es, kv_log
-    use timer,         only: timer_t, tic, toc, timer_record
+    use timer,         only: start_timer, stop_timer
     use units,         only: bohr_to_ang
     use errors,        only: fatal
     implicit none
@@ -30,7 +30,6 @@ contains
 
         class(method_calc_t),     allocatable :: calc
         class(property_method_t), allocatable :: prop
-        type(timer_t) :: t_init, t_exec
         character(len=128) :: buf
         integer :: i
 
@@ -70,16 +69,14 @@ contains
         end select
 
         !-- Pipeline générique : init → build → execute → write --------
-        call tic(t_init)
+        call start_timer("CALC_INIT_BUILD")
         call calc%init(struct, inp%basis, prop)
         call calc%build()
-        call toc(t_init)
-        call timer_record("calc_init_build", t_init)
+        call stop_timer("CALC_INIT_BUILD")
 
-        call tic(t_exec)
+        call start_timer("CALC_EXECUTE")
         call calc%execute()
-        call toc(t_exec)
-        call timer_record("calc_execute", t_exec)
+        call stop_timer("CALC_EXECUTE")
 
         call calc%write_output()
     end subroutine run_single_point

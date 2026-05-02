@@ -132,6 +132,7 @@ contains
                 case (KW_SCC);    inp%calc%dftb%scc    = bool_value(val)
                 case (KW_MAXSCC); read(val, *) inp%calc%dftb%maxscc
                 case (KW_TOLSCC); read(val, *) inp%calc%dftb%tolscc
+                case (KW_WRITE_MATRIX); inp%calc%dftb%write_matrix = bool_value(val)
                 case default
                     call warn("parse_input", "unknown CALC.DFTB key: "//trim(key))
                 end select

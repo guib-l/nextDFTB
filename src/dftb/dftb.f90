@@ -71,6 +71,7 @@ contains
         class default
             call fatal("dftb", "init: expected property_dftb_t")
         end select
+        call self%struct%initialize()
         self%initialized = .true.
         self%built       = .false.
     end subroutine dftb_init
@@ -107,7 +108,7 @@ contains
         if (.not. self%built) call fatal("dftb", "execute before build")
 
         call solve_scc(self%struct, self%prop%scc, self%prop%maxscc, &
-                       self%prop%tolscc, self%state)
+                       self%prop%tolscc, self%prop%write_matrix, self%state)
 
         self%state%e_rep = repulsive_energy(self%struct)
         if (self%prop%scc) then
