@@ -32,12 +32,21 @@ module property
         type(orbital_spec_t), allocatable :: orbitals(:)
     end type property_basis_t
 
+    !> Paramètres du mixer de charges SCC.
+    type, public :: property_mixer_t
+        character(len=16) :: type    = "SIMPLE"   ! SIMPLE | RANDOM | BROYDEN
+        real(wp)          :: factor  = 0.1_wp
+        integer           :: history = 6
+        real(wp)          :: omega0  = 0.01_wp
+    end type property_mixer_t
+
     !> Propriétés du calculateur DFTB.
     type, extends(property_method_t), public :: property_dftb_t
-        logical  :: scc          = .false.
-        integer  :: maxscc       = 100
-        real(wp) :: tolscc       = 1.0e-5_wp
-        logical  :: write_matrix = .false.
+        logical                 :: scc          = .false.
+        integer                 :: maxscc       = 100
+        real(wp)                :: tolscc       = 1.0e-5_wp
+        logical                 :: write_matrix = .false.
+        type(property_mixer_t)  :: mixing
     end type property_dftb_t
 
     !> Propriétés du calculateur DFT (vide pour l'instant).

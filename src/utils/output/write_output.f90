@@ -51,18 +51,18 @@ contains
     subroutine banner(title)
         character(len=*), intent(in) :: title
         if (.not. out_open) return
-        write(out_unit, '(a)') repeat('=', 70)
+        write(out_unit, '(a)') repeat('=', 80)
         write(out_unit, '(a)') trim(title)
-        write(out_unit, '(a)') repeat('=', 70)
+        write(out_unit, '(a)') repeat('=', 80)
     end subroutine banner
 
     subroutine section(title)
         character(len=*), intent(in) :: title
         if (.not. out_open) return
         write(out_unit, '(a)') ""
-        write(out_unit, '(a)') repeat('-', 70)
+        write(out_unit, '(a)') repeat('-', 80)
         write(out_unit, '(a)') " " // trim(title)
-        write(out_unit, '(a)') repeat('-', 70)
+        write(out_unit, '(a)') repeat('-', 80)
     end subroutine section
 
     subroutine subsection(title)
@@ -143,9 +143,9 @@ contains
         stamp = date(1:4)//"-"//date(5:6)//"-"//date(7:8)//"  "// &
                 time(1:2)//":"//time(3:4)//":"//time(5:6)
         write(out_unit, '(a)') ""
-        write(out_unit, '(a)') repeat('=', 70)
+        write(out_unit, '(a)') repeat('=', 80)
         write(out_unit, '(a,a)') " finished : ", trim(stamp)
-        write(out_unit, '(a)') repeat('=', 70)
+        write(out_unit, '(a)') repeat('=', 80)
     end subroutine write_footer
 
     !-- helper interne --------------------------------------------------

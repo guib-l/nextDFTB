@@ -39,6 +39,10 @@ module keywords
     character(len=*), parameter, public :: KW_MAXSCC = "MAXSCC"
     character(len=*), parameter, public :: KW_TOLSCC = "TOLSCC"
     character(len=*), parameter, public :: KW_WRITE_MATRIX = "WRITE_MATRIX"
+    character(len=*), parameter, public :: KW_MIXING       = "MIXING"
+    character(len=*), parameter, public :: KW_MIX_FACTOR   = "FACTOR"
+    character(len=*), parameter, public :: KW_MIX_HISTORY  = "HISTORY"
+    character(len=*), parameter, public :: KW_MIX_OMEGA0   = "OMEGA0"
     ! DRIVER
     character(len=*), parameter, public :: KW_DRV_TYPE = "TYPE"
     ! OUTPUT

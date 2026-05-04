@@ -66,7 +66,7 @@ contains
     subroutine write_timer()
         integer :: u, i, idx_total
         real(wp) :: dt_total, pct
-        character(len=43) :: name_pad
+        character(len=42) :: name_pad
         character(len=128) :: buf
 
         if (.not. output_is_open()) return
@@ -81,12 +81,13 @@ contains
             dt_total = g_reg(idx_total)%dt_cumul
         end if
 
-        write(u, '(a)') repeat('*', 79)
+        write(u, '(a)') ""
+        write(u, '(a)') repeat('-', 79)
         write(u, '(a)') " TIMER ::"
-        write(u, '(a)') " "//hbar_top()
+        write(u, '(a)') " "//char_box_top()
         write(u, '(a)') " |           Name                            |  Loop  |"// &
                         "  Time [s] | Relat [%] |"
-        write(u, '(a)') " "//hbar_mid()
+        write(u, '(a)') " "//char_box_mid()
 
         do i = 1, g_n
             if (i == idx_total) cycle
@@ -96,27 +97,26 @@ contains
             else
                 pct = 0.0_wp
             end if
-            write(buf, '(a,a,a,i6,a,f9.4,a,f8.3,a)') &
-                " | ", name_pad, " |", g_reg(i)%niter, " |", &
-                g_reg(i)%dt_cumul, " |", pct, "    |"
+            write(buf, '(" | ",a42,"|",i8,"|",f11.4,"|",f11.3,"|")') &
+                name_pad, g_reg(i)%niter, g_reg(i)%dt_cumul, pct
             write(u, '(a)') trim(buf)
         end do
 
         if (idx_total /= 0) then
-            write(u, '(a)') " "//hbar_mid()
+            write(u, '(a)') " "//char_box_mid()
             name_pad = pad_name("TOTAL")
-            write(buf, '(a,a,a,i6,a,f9.4,a,a)') &
-                " | ", name_pad, " |", g_reg(idx_total)%niter, " |", &
-                g_reg(idx_total)%dt_cumul, " |    100    |"
+            write(buf, '(" | ",a42,"|",i8,"|",f11.4,"|",f11.3,"|")') &
+                name_pad, g_reg(idx_total)%niter, &
+                g_reg(idx_total)%dt_cumul, 100.0_wp
             write(u, '(a)') trim(buf)
         end if
 
-        write(u, '(a)') " "//hbar_bot()
+        write(u, '(a)') " "//char_box_bot()
         write(u, '(a)') ""
         write(u, '(a,a)') " > Start at : ", g_start_stamp
         write(u, '(a,a)') " > Stop at  : ", g_stop_stamp
         write(u, '(a)') ""
-        write(u, '(a)') repeat('*', 79)
+        write(u, '(a)') repeat('-', 79)
     end subroutine write_timer
 
     subroutine timer_reset()
@@ -172,27 +172,12 @@ contains
 
     pure function pad_name(s) result(o)
         character(len=*), intent(in) :: s
-        character(len=43) :: o
+        character(len=42) :: o
         integer :: n
-        o = repeat(' ', 43)
-        n = min(len_trim(s), 43)
+        o = repeat(' ', 42)
+        n = min(len_trim(s), 42)
         if (n > 0) o(1:n) = s(1:n)
     end function pad_name
-
-    pure function hbar_top() result(s)
-        character(len=:), allocatable :: s
-        s = char_box_top()
-    end function hbar_top
-
-    pure function hbar_mid() result(s)
-        character(len=:), allocatable :: s
-        s = char_box_mid()
-    end function hbar_mid
-
-    pure function hbar_bot() result(s)
-        character(len=:), allocatable :: s
-        s = char_box_bot()
-    end function hbar_bot
 
     pure function char_box_top() result(s)
         character(len=:), allocatable :: s

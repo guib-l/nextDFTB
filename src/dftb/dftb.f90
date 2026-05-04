@@ -107,8 +107,9 @@ contains
         class(dftb_calc_t), intent(inout) :: self
         if (.not. self%built) call fatal("dftb", "execute before build")
 
-        call solve_scc(self%struct, self%prop%scc, self%prop%maxscc, &
-                       self%prop%tolscc, self%prop%write_matrix, self%state)
+        call solve_scc(self%struct, self%prop%scc, self%prop%maxscc,    &
+                       self%prop%tolscc, self%prop%write_matrix,        &
+                       self%prop%mixing, self%state)
 
         self%state%e_rep = repulsive_energy(self%struct)
         if (self%prop%scc) then

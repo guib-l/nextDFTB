@@ -20,7 +20,9 @@ module scc
     use linalg,        only: solve_gen_eig
     use charges,       only: mulliken_charges, delta_charges
     use coulomb,       only: coulomb_potential
-    use mixer,         only: mixer_t, init_mixer, free_mixer, mix_charges
+    use mixer,         only: mixer_t
+    use mixer_factory, only: make_mixer
+    use property,      only: property_mixer_t
     use write_dftb,    only: write_dftb_scc_header, write_dftb_scc_iter, &
                               write_dftb_scc_status, write_dftb_matrices
     implicit none
@@ -30,18 +32,19 @@ module scc
 
 contains
 
-    subroutine solve_scc(struct, do_scc, maxit, tol, write_matrix, st)
-        type(structure_t),  intent(in)    :: struct
-        logical,            intent(in)    :: do_scc
-        integer,            intent(in)    :: maxit
-        real(wp),           intent(in)    :: tol
-        logical,            intent(in)    :: write_matrix
-        type(dftbstate_t),  intent(inout) :: st
+    subroutine solve_scc(struct, do_scc, maxit, tol, write_matrix, mixing, st)
+        type(structure_t),      intent(in)    :: struct
+        logical,                intent(in)    :: do_scc
+        integer,                intent(in)    :: maxit
+        real(wp),               intent(in)    :: tol
+        logical,                intent(in)    :: write_matrix
+        type(property_mixer_t), intent(in)    :: mixing
+        type(dftbstate_t),      intent(inout) :: st
 
         integer  :: norb, natoms, it, mu, nu, ia, ib
         real(wp) :: max_diff, V_mu, V_nu
         real(wp), allocatable :: H0(:,:), V_atom(:), dq_new(:)
-        type(mixer_t) :: mx
+        class(mixer_t), allocatable :: mx
 
         norb   = st%bas%norb_total
         natoms = struct%natoms
@@ -113,10 +116,10 @@ contains
                 exit
             end if
 
-            if (it == 1) call init_mixer(mx, natoms, 0)
+            if (it == 1) call make_mixer(mixing, natoms, mx)
             block
                 real(wp) :: dq_mixed(natoms)
-                call mix_charges(mx, st%dq, dq_new, dq_mixed)
+                call mx%mix(st%dq, dq_new, dq_mixed)
                 st%dq = dq_mixed
             end block
         end do
@@ -125,7 +128,10 @@ contains
 
         if (do_scc) call write_dftb_scc_status(st%converged, st%niter)
 
-        if (do_scc) call free_mixer(mx)
+        if (do_scc .and. allocated(mx)) then
+            call mx%free()
+            deallocate(mx)
+        end if
         deallocate(H0, V_atom, dq_new)
     end subroutine solve_scc
 

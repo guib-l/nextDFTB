@@ -15,7 +15,7 @@ module driver
     implicit none
     private
 
-    character(len=*), parameter :: PROG_TITLE   = "nextDFTB — single point"
+    character(len=*), parameter :: PROG_TITLE   = "nextDFTB — Calculation "
     character(len=*), parameter :: PROG_VERSION = "0.1.0"
 
     public :: run_default

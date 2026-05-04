@@ -141,6 +141,25 @@ contains
             else
                 call warn("parse_input", "ignored nested key in "//trim(stack(1))//"/"//trim(stack(2)))
             end if
+        case (3)
+            if (trim(stack(1)) == KW_CALC .and. trim(stack(2)) == KW_DFTB &
+                .and. trim(stack(3)) == KW_MIXING) then
+                select case (trim(ukey))
+                case (KW_TYPE)
+                    inp%calc%dftb%mixing%type = upper(unquote(val))
+                case (KW_MIX_FACTOR)
+                    read(val, *) inp%calc%dftb%mixing%factor
+                case (KW_MIX_HISTORY)
+                    read(val, *) inp%calc%dftb%mixing%history
+                case (KW_MIX_OMEGA0)
+                    read(val, *) inp%calc%dftb%mixing%omega0
+                case default
+                    call warn("parse_input", &
+                        "unknown CALC.DFTB.MIXING key: "//trim(key))
+                end select
+            else
+                call warn("parse_input", "deep nesting not handled")
+            end if
         case default
             call warn("parse_input", "deep nesting not handled")
         end select

@@ -43,7 +43,11 @@ add_executable(nextdftb
     dftb/compute/dftb_energy.f90
     dftb/compute/dftb_grad.f90
     dftb/solver/linalg.f90
-    dftb/solver/mixer.f90
+    dftb/solver/mixer/mixer.f90
+    dftb/solver/mixer/simple_mixer.f90
+    dftb/solver/mixer/random_mixer.f90
+    dftb/solver/mixer/broyden_mixer.f90
+    dftb/solver/mixer/mixer_factory.f90
     dftb/solver/scc.f90
     dftb/repulsif/repulsif.f90
     dftb/disp/disp.f90
