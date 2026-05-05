@@ -45,15 +45,22 @@ contains
         call kv_int("max_iterations", maxscc)
         call kv_real_es("tolerance", tolscc)
         call line("")
-        call line("    iter        max|dq|")
-        call line("  --------  --------------")
+        call line("    iter         dE_elec         max|dq|")
+        call line("  --------  ----------------  ----------------")
     end subroutine write_dftb_scc_header
 
-    subroutine write_dftb_scc_iter(it, max_diff)
+    subroutine write_dftb_scc_iter(it, dE_elec, max_diff, has_dE)
         integer,  intent(in) :: it
-        real(wp), intent(in) :: max_diff
+        real(wp), intent(in) :: dE_elec, max_diff
+        logical,  intent(in) :: has_dE
         if (.not. output_is_open()) return
-        write(output_unit_id(), '(a,i6,a,es16.6)') "  ", it, "    ", max_diff
+        if (has_dE) then
+            write(output_unit_id(), '(a,i6,a,es18.6,a,es18.6)') &
+                "  ", it, "  ", dE_elec, "  ", max_diff
+        else
+            write(output_unit_id(), '(a,i6,a,a18,a,es18.6)') &
+                "  ", it, "  ", "      ---         ", "  ", max_diff
+        end if
     end subroutine write_dftb_scc_iter
 
     subroutine write_dftb_scc_status(converged, niter)

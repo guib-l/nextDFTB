@@ -14,8 +14,9 @@
 module dftb
     use kinds,         only: wp
     use structure_mod, only: structure_t
-    use property,      only: property_basis_t, property_dftb_t, &
-                              property_method_t
+    use property,      only: property_basis_t, property_dftb_t,        &
+                              property_method_t,                        &
+                              SCHEME_BASIC, SCHEME_NOSCC, SCHEME_SCC
     use method_calc,   only: method_calc_t
     use dftbstate,     only: dftbstate_t
     use skf,           only: skf_init       => init,            &
@@ -107,16 +108,17 @@ contains
         class(dftb_calc_t), intent(inout) :: self
         if (.not. self%built) call fatal("dftb", "execute before build")
 
-        call solve_scc(self%struct, self%prop%scc, self%prop%maxscc,    &
-                       self%prop%tolscc, self%prop%write_matrix,        &
-                       self%prop%mixing, self%state)
+        call solve_scc(self%struct, self%prop%scheme, self%prop%gamma_kind, &
+                       self%prop%maxscc, self%prop%tolscc,                  &
+                       self%prop%write_matrix, self%prop%mixing, self%state)
 
         self%state%e_rep = repulsive_energy(self%struct)
-        if (self%prop%scc) then
-            self%state%e_coul = coulomb_energy(self%state%gamma, self%state%dq)
-        else
+        select case (self%prop%scheme)
+        case (SCHEME_BASIC)
             self%state%e_coul = 0.0_wp
-        end if
+        case (SCHEME_NOSCC, SCHEME_SCC)
+            self%state%e_coul = coulomb_energy(self%state%gamma, self%state%dq)
+        end select
         self%state%e_total = total_energy(self%state%e_band, &
                                           self%state%e_coul, self%state%e_rep)
 

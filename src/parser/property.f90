@@ -12,6 +12,17 @@ module property
     implicit none
     private
 
+    !-- Schémas de calcul DFTB ----------------------------------------
+    integer, parameter, public :: SCHEME_BASIC = 1
+    integer, parameter, public :: SCHEME_NOSCC = 2
+    integer, parameter, public :: SCHEME_SCC   = 3
+
+    !-- Variantes de calcul de la matrice gamma -----------------------
+    !> Valeurs distinctes des noms de fonctions homonymes dans gamma_mod.
+    integer, parameter, public :: GK_BASE = 1
+    integer, parameter, public :: GK_MEAN = 2
+    integer, parameter, public :: GK_STDR = 3
+
     !> Base abstraite pour les propriétés d'un calculateur de méthode
     !> (DFTB / DFT). Permet le passage polymorphe à `method_calc%init`.
     type, abstract, public :: property_method_t
@@ -42,7 +53,8 @@ module property
 
     !> Propriétés du calculateur DFTB.
     type, extends(property_method_t), public :: property_dftb_t
-        logical                 :: scc          = .false.
+        integer                 :: scheme       = SCHEME_NOSCC
+        integer                 :: gamma_kind   = GK_MEAN
         integer                 :: maxscc       = 100
         real(wp)                :: tolscc       = 1.0e-5_wp
         logical                 :: write_matrix = .false.

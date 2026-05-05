@@ -7,7 +7,9 @@
 !> sont portées par les déclarations de ces objets.
 module parse_input
     use kinds,    only: wp
-    use property, only: property_basis_t, orbital_spec_t
+    use property, only: property_basis_t, orbital_spec_t,                  &
+                         SCHEME_BASIC, SCHEME_NOSCC, SCHEME_SCC,           &
+                         GK_BASE, GK_MEAN, GK_STDR
     use keywords
     use errors,   only: fatal, warn
     implicit none
@@ -129,9 +131,8 @@ contains
             if (trim(stack(1)) == KW_CALC .and. trim(stack(2)) == KW_DFTB) then
                 inp%calc%kind = "DFTB"
                 select case (trim(ukey))
-                case (KW_SCC);    inp%calc%dftb%scc    = bool_value(val)
-                case (KW_MAXSCC); read(val, *) inp%calc%dftb%maxscc
-                case (KW_TOLSCC); read(val, *) inp%calc%dftb%tolscc
+                case (KW_GAMMA)
+                    inp%calc%dftb%gamma_kind = parse_gamma_kind(val)
                 case (KW_WRITE_MATRIX); inp%calc%dftb%write_matrix = bool_value(val)
                 case default
                     call warn("parse_input", "unknown CALC.DFTB key: "//trim(key))
@@ -157,6 +158,19 @@ contains
                     call warn("parse_input", &
                         "unknown CALC.DFTB.MIXING key: "//trim(key))
                 end select
+            else if (trim(stack(1)) == KW_CALC .and. trim(stack(2)) == KW_DFTB &
+                .and. trim(stack(3)) == KW_SCHEM) then
+                select case (trim(ukey))
+                case (KW_TYPE)
+                    inp%calc%dftb%scheme = parse_scheme(val)
+                case (KW_MAXSCC)
+                    read(val, *) inp%calc%dftb%maxscc
+                case (KW_TOLSCC)
+                    read(val, *) inp%calc%dftb%tolscc
+                case default
+                    call warn("parse_input", &
+                        "unknown CALC.DFTB.SCHEM key: "//trim(key))
+                end select
             else
                 call warn("parse_input", "deep nesting not handled")
             end if
@@ -164,6 +178,40 @@ contains
             call warn("parse_input", "deep nesting not handled")
         end select
     end subroutine dispatch_assign
+
+
+    function parse_scheme(val) result(s)
+        character(len=*), intent(in) :: val
+        integer :: s
+        character(len=:), allocatable :: u
+        u = upper(unquote(val))
+        select case (trim(u))
+        case (KW_BASIC); s = SCHEME_BASIC
+        case (KW_NOSCC); s = SCHEME_NOSCC
+        case (KW_SCC);   s = SCHEME_SCC
+        case default
+            call fatal("parse_input", &
+                "unknown CALC.DFTB.SCHEM.TYPE: "//trim(val))
+            s = SCHEME_NOSCC
+        end select
+    end function parse_scheme
+
+
+    function parse_gamma_kind(val) result(g)
+        character(len=*), intent(in) :: val
+        integer :: g
+        character(len=:), allocatable :: u
+        u = upper(unquote(val))
+        select case (trim(u))
+        case (KW_GAMMA_BASE); g = GK_BASE
+        case (KW_GAMMA_MEAN); g = GK_MEAN
+        case (KW_GAMMA_STDR); g = GK_STDR
+        case default
+            call fatal("parse_input", &
+                "unknown CALC.DFTB.GAMMA value: "//trim(val))
+            g = GK_MEAN
+        end select
+    end function parse_gamma_kind
 
 
     subroutine append_orbital(basis, sym, orbs)

@@ -25,7 +25,7 @@ module matel
     implicit none
     private
 
-    public :: build_basis_system, build_hs
+    public :: build_basis_system, build_hs, build_hs_diag, build_hs_offdiag
 
 contains
 
@@ -181,21 +181,30 @@ contains
 
 
     !> Construit H et S (norb × norb) pour la structure donnée.
+    !> Wrapper : remet H et S à zéro puis remplit la diagonale et la
+    !> partie off-diagonale via les deux sous-routines dédiées.
     subroutine build_hs(struct, bas, H, S)
         type(structure_t),    intent(in)  :: struct
         type(basis_system_t), intent(in)  :: bas
         real(wp),             intent(out) :: H(:,:), S(:,:)
 
-        integer :: i, j, ei, oi, oj, ni, nj, mu, nu
-        real(wp) :: r, dir(3)
-        real(wp) :: hblk(4,4), sblk(4,4)
-        real(wp), allocatable :: h_ab(:), s_ab(:), h_ba(:), s_ba(:)
-        character(len=SYMBOL_LEN) :: sym_i, sym_j
-
         H = 0.0_wp
         S = 0.0_wp
+        call build_hs_diag(struct, bas, H, S)
+        call build_hs_offdiag(struct, bas, H, S)
+    end subroutine build_hs
 
-        ! Diagonale (onsite)
+
+    !> Remplit les blocs diagonaux onsite (i,i) de H et S.
+    !> H et S doivent être déjà alloués ; les éléments hors diagonale
+    !> ne sont pas modifiés.
+    subroutine build_hs_diag(struct, bas, H, S)
+        type(structure_t),    intent(in)    :: struct
+        type(basis_system_t), intent(in)    :: bas
+        real(wp),             intent(inout) :: H(:,:), S(:,:)
+
+        integer :: i, ei, oi, ni
+
         do i = 1, struct%natoms
             ei = bas%atom_elem(i)
             oi = bas%atom_orb_start(i)
@@ -209,8 +218,23 @@ contains
                 S(oi+3, oi+3) = 1.0_wp; H(oi+3, oi+3) = bas%elems(ei)%e_p
             end if
         end do
+    end subroutine build_hs_diag
 
-        ! Off-diagonale (i < j) puis symétrisation
+
+    !> Remplit les blocs off-diagonaux (i ≠ j) de H et S.
+    !> Exploite la symétrie : seul le triangle supérieur (j > i) est
+    !> calculé, le triangle inférieur est obtenu par miroir.
+    subroutine build_hs_offdiag(struct, bas, H, S)
+        type(structure_t),    intent(in)    :: struct
+        type(basis_system_t), intent(in)    :: bas
+        real(wp),             intent(inout) :: H(:,:), S(:,:)
+
+        integer :: i, j, oi, oj, ni, nj, mu, nu
+        real(wp) :: r, dir(3)
+        real(wp) :: hblk(4,4), sblk(4,4)
+        real(wp), allocatable :: h_ab(:), s_ab(:), h_ba(:), s_ba(:)
+        character(len=SYMBOL_LEN) :: sym_i, sym_j
+
         do i = 1, struct%natoms
             sym_i = struct%atoms(i)%symbol
             do j = i + 1, struct%natoms
@@ -239,5 +263,10 @@ contains
                 end do
             end do
         end do
-    end subroutine build_hs
+
+        if (allocated(h_ab)) deallocate(h_ab)
+        if (allocated(s_ab)) deallocate(s_ab)
+        if (allocated(h_ba)) deallocate(h_ba)
+        if (allocated(s_ba)) deallocate(s_ba)
+    end subroutine build_hs_offdiag
 end module matel

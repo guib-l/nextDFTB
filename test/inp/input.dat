@@ -14,10 +14,13 @@ BASIS = {
 
 CALC = {
     DFTB = {
-        SCC = True
-        MAXSCC = 100
-        TOLSCC = 1e-7
         WRITE_MATRIX = False
+        GAMMA = MEAN
+        SCHEM = {
+            TYPE = SCC
+            MAXSCC = 100
+            TOLSCC = 1e-7
+        }
         MIXING = {
             TYPE = BROYDEN
             FACTOR = 0.1

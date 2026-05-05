@@ -35,7 +35,6 @@ module keywords
     character(len=*), parameter, public :: KW_DFTB   = "DFTB"
     character(len=*), parameter, public :: KW_DFT    = "DFT"
     character(len=*), parameter, public :: KW_SKF    = "SKF"
-    character(len=*), parameter, public :: KW_SCC    = "SCC"
     character(len=*), parameter, public :: KW_MAXSCC = "MAXSCC"
     character(len=*), parameter, public :: KW_TOLSCC = "TOLSCC"
     character(len=*), parameter, public :: KW_WRITE_MATRIX = "WRITE_MATRIX"
@@ -43,6 +42,16 @@ module keywords
     character(len=*), parameter, public :: KW_MIX_FACTOR   = "FACTOR"
     character(len=*), parameter, public :: KW_MIX_HISTORY  = "HISTORY"
     character(len=*), parameter, public :: KW_MIX_OMEGA0   = "OMEGA0"
+    character(len=*), parameter, public :: KW_SCHEM        = "SCHEM"
+    character(len=*), parameter, public :: KW_GAMMA        = "GAMMA"
+    ! Valeurs SCHEM.TYPE
+    character(len=*), parameter, public :: KW_BASIC = "BASIC"
+    character(len=*), parameter, public :: KW_NOSCC = "NOSCC"
+    character(len=*), parameter, public :: KW_SCC   = "SCC"
+    ! Valeurs GAMMA
+    character(len=*), parameter, public :: KW_GAMMA_BASE = "BASE"
+    character(len=*), parameter, public :: KW_GAMMA_MEAN = "MEAN"
+    character(len=*), parameter, public :: KW_GAMMA_STDR = "STDR"
     ! DRIVER
     character(len=*), parameter, public :: KW_DRV_TYPE = "TYPE"
     ! OUTPUT
