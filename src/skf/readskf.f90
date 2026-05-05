@@ -6,7 +6,7 @@
 !>   - section optionnelle "Spline" pour la répulsion
 module readskf
     use kinds,  only: wp
-    use slakos, only: skf_t, skf_store_t, spline_seg_t, SKF_NCOL
+    use slakos, only: skf_t, skf_store_t, spline_seg_t, SKF_NCOL, SKF_NHS
     use errors, only: fatal
     implicit none
     private
@@ -77,11 +77,13 @@ contains
         skf%rcut         = r2(10)
         skf%d_poly(1:10) = r2(11:20)
 
-        allocate(skf%hs(SKF_NCOL, skf%ngrid))
+        allocate(skf%h(SKF_NHS, skf%ngrid))
+        allocate(skf%s(SKF_NHS, skf%ngrid))
         do i = 1, skf%ngrid
             read(u, *, iostat=ios) row20
             if (ios /= 0) call fatal("readskf", "bad HS row")
-            skf%hs(:, i) = row20
+            skf%h(1:SKF_NHS, i) = row20(1:SKF_NHS)
+            skf%s(1:SKF_NHS, i) = row20(SKF_NHS+1:SKF_NCOL)
         end do
 
         do

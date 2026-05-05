@@ -99,8 +99,6 @@ contains
                 end select
             end if
 
-            if (bas%elems(i)%l_max == 2) &
-                call fatal("matel", "d-orbitals not supported yet for "//trim(sym))
         end do
 
         allocate(bas%atom_elem(struct%natoms))
@@ -196,63 +194,43 @@ contains
 
 
     !> Remplit les blocs diagonaux onsite (i,i) de H et S.
-    !> H et S doivent être déjà alloués ; les éléments hors diagonale
-    !> ne sont pas modifiés.
     subroutine build_hs_diag(struct, bas, H, S)
         type(structure_t),    intent(in)    :: struct
         type(basis_system_t), intent(in)    :: bas
         real(wp),             intent(inout) :: H(:,:), S(:,:)
 
-        integer :: i, ei, oi, ni
+        integer :: i, oi, ni, mu
+        real(wp), allocatable :: hblk(:,:), sblk(:,:)
 
         do i = 1, struct%natoms
-            ei = bas%atom_elem(i)
-            oi = bas%atom_orb_start(i)
             ni = bas%atom_norb(i)
-
-            S(oi, oi) = 1.0_wp
-            H(oi, oi) = bas%elems(ei)%e_s
-            if (ni >= 4) then
-                S(oi+1, oi+1) = 1.0_wp; H(oi+1, oi+1) = bas%elems(ei)%e_p
-                S(oi+2, oi+2) = 1.0_wp; H(oi+2, oi+2) = bas%elems(ei)%e_p
-                S(oi+3, oi+3) = 1.0_wp; H(oi+3, oi+3) = bas%elems(ei)%e_p
-            end if
+            oi = bas%atom_orb_start(i)
+            allocate(hblk(ni, ni), sblk(ni, ni))
+            call build_diag_block(bas, i, hblk, sblk)
+            do mu = 1, ni
+                H(oi+mu-1, oi+mu-1) = hblk(mu, mu)
+                S(oi+mu-1, oi+mu-1) = sblk(mu, mu)
+            end do
+            deallocate(hblk, sblk)
         end do
     end subroutine build_hs_diag
 
 
     !> Remplit les blocs off-diagonaux (i ≠ j) de H et S.
-    !> Exploite la symétrie : seul le triangle supérieur (j > i) est
-    !> calculé, le triangle inférieur est obtenu par miroir.
     subroutine build_hs_offdiag(struct, bas, H, S)
         type(structure_t),    intent(in)    :: struct
         type(basis_system_t), intent(in)    :: bas
         real(wp),             intent(inout) :: H(:,:), S(:,:)
 
         integer :: i, j, oi, oj, ni, nj, mu, nu
-        real(wp) :: r, dir(3)
-        real(wp) :: hblk(4,4), sblk(4,4)
-        real(wp), allocatable :: h_ab(:), s_ab(:), h_ba(:), s_ba(:)
-        character(len=SYMBOL_LEN) :: sym_i, sym_j
+        real(wp), allocatable :: hblk(:,:), sblk(:,:)
 
         do i = 1, struct%natoms
-            sym_i = struct%atoms(i)%symbol
             do j = i + 1, struct%natoms
-                sym_j = struct%atoms(j)%symbol
+                ni = bas%atom_norb(i); nj = bas%atom_norb(j)
                 oi = bas%atom_orb_start(i); oj = bas%atom_orb_start(j)
-                ni = bas%atom_norb(i);      nj = bas%atom_norb(j)
-
-                r = struct%dist(i, j)
-                if (r < 1.0e-8_wp) cycle
-                dir = (struct%atoms(j)%position - struct%atoms(i)%position) / r
-
-                h_ab = skf_get_hamiltonian(trim(sym_i), trim(sym_j), r)
-                s_ab = skf_get_overlaps   (trim(sym_i), trim(sym_j), r)
-                h_ba = skf_get_hamiltonian(trim(sym_j), trim(sym_i), r)
-                s_ba = skf_get_overlaps   (trim(sym_j), trim(sym_i), r)
-
-                call sk_block(h_ab, s_ab, h_ba, s_ba, dir, ni, nj, hblk, sblk)
-
+                allocate(hblk(ni, nj), sblk(ni, nj))
+                call build_off_block(struct, bas, i, j, hblk, sblk)
                 do mu = 1, ni
                     do nu = 1, nj
                         H(oi+mu-1, oj+nu-1) = hblk(mu, nu)
@@ -261,12 +239,70 @@ contains
                         S(oj+nu-1, oi+mu-1) = sblk(mu, nu)
                     end do
                 end do
+                deallocate(hblk, sblk)
             end do
         end do
-
-        if (allocated(h_ab)) deallocate(h_ab)
-        if (allocated(s_ab)) deallocate(s_ab)
-        if (allocated(h_ba)) deallocate(h_ba)
-        if (allocated(s_ba)) deallocate(s_ba)
     end subroutine build_hs_offdiag
+
+
+    !> Calcule le bloc diagonal (ni × ni) pour l'atome i :
+    !> S = identité, H = diag(eps_s, eps_p, eps_p, eps_p, eps_d×5).
+    subroutine build_diag_block(bas, i, hblk, sblk)
+        type(basis_system_t), intent(in)  :: bas
+        integer,              intent(in)  :: i
+        real(wp),             intent(out) :: hblk(:,:), sblk(:,:)
+        integer :: ei, ni, k
+
+        hblk = 0.0_wp; sblk = 0.0_wp
+        ei = bas%atom_elem(i)
+        ni = bas%atom_norb(i)
+
+        sblk(1, 1) = 1.0_wp
+        hblk(1, 1) = bas%elems(ei)%e_s
+        if (ni >= 4) then
+            do k = 2, 4
+                sblk(k, k) = 1.0_wp
+                hblk(k, k) = bas%elems(ei)%e_p
+            end do
+        end if
+        if (ni >= 9) then
+            do k = 5, 9
+                sblk(k, k) = 1.0_wp
+                hblk(k, k) = bas%elems(ei)%e_d
+            end do
+        end if
+    end subroutine build_diag_block
+
+
+    !> Calcule le bloc hors-diagonal (ni × nj) entre les atomes i et j
+    !> via skf + skrot.
+    subroutine build_off_block(struct, bas, i, j, hblk, sblk)
+        type(structure_t),    intent(in)  :: struct
+        type(basis_system_t), intent(in)  :: bas
+        integer,              intent(in)  :: i, j
+        real(wp),             intent(out) :: hblk(:,:), sblk(:,:)
+        integer :: ni, nj
+        real(wp) :: r, dir(3)
+        real(wp), allocatable :: h_ab(:), s_ab(:), h_ba(:), s_ba(:)
+        character(len=SYMBOL_LEN) :: sym_i, sym_j
+
+        hblk = 0.0_wp; sblk = 0.0_wp
+
+        ni = bas%atom_norb(i); nj = bas%atom_norb(j)
+        sym_i = struct%atoms(i)%symbol
+        sym_j = struct%atoms(j)%symbol
+
+        r = struct%dist(i, j)
+        if (r < 1.0e-8_wp) return
+        dir = (struct%atoms(j)%position - struct%atoms(i)%position) / r
+
+        h_ab = skf_get_hamiltonian(trim(sym_i), trim(sym_j), r)
+        s_ab = skf_get_overlaps   (trim(sym_i), trim(sym_j), r)
+        h_ba = skf_get_hamiltonian(trim(sym_j), trim(sym_i), r)
+        s_ba = skf_get_overlaps   (trim(sym_j), trim(sym_i), r)
+
+        call sk_block(h_ab, s_ab, h_ba, s_ba, dir, ni, nj, hblk, sblk)
+
+        deallocate(h_ab, s_ab, h_ba, s_ba)
+    end subroutine build_off_block
 end module matel

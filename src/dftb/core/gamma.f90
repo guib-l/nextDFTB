@@ -13,7 +13,6 @@ module gamma_mod
     use structure_mod, only: structure_t
     use dftbstate,     only: basis_system_t
     use property,      only: GK_BASE, GK_MEAN, GK_STDR
-    use errors,        only: fatal
     implicit none
     private
 
@@ -89,11 +88,41 @@ contains
 
 
     !> γ_AB selon le schéma standard DFTB+ (analytique pour fonctions
-    !> de Slater de Hubbard différents). Non implémenté pour le moment.
+    !> de Slater de Hubbard différents).
     function gamma_stdr(U_a, U_b, r) result(g)
         real(wp), intent(in) :: U_a, U_b, r
         real(wp) :: g
-        g = 0.0_wp * (U_a + U_b + r)
-        call fatal("gamma_mod", "gamma_stdr not implemented yet")
+        real(wp) :: tauA, tauB, tauM
+        real(wp), parameter :: TOL_R = 1.0e-6_wp
+        real(wp), parameter :: TOL_U = 1.0e-6_wp
+
+        tauA = 3.2_wp * U_a
+        tauB = 3.2_wp * U_b
+
+        if (r < TOL_R) then
+            if (abs(U_a - U_b) < TOL_U) then
+                g = -0.5_wp * (U_a + U_b)
+            else
+                g = -0.5_wp * ( (tauA * tauB) / (tauA + tauB) &
+                              + (tauA * tauB)**2 / (tauA + tauB)**3 )
+            end if
+        else if (abs(U_a - U_b) < TOL_U) then
+            tauM = 0.5_wp * (tauA + tauB)
+            g = exp(-tauM * r) * ( 1.0_wp / r + 0.6875_wp * tauM &
+                + 0.1875_wp * r * tauM**2 &
+                + 0.020833333333_wp * r**2 * tauM**3 )
+        else
+            g = gamma_E(r, tauA, tauB) + gamma_E(r, tauB, tauA)
+        end if
     end function gamma_stdr
+
+
+    !> Terme exponentiel auxiliaire pour gamma_stdr (Hubbard distincts).
+    pure function gamma_E(r, a, b) result(v)
+        real(wp), intent(in) :: r, a, b
+        real(wp) :: v, d
+        d = a*a - b*b
+        v = exp(-a * r) * ( 0.5_wp * b**4 * a / d**2 &
+                          - (b**6 - 3.0_wp * b**4 * a**2) / (r * d**3) )
+    end function gamma_E
 end module gamma_mod

@@ -20,8 +20,9 @@ module skf
     use method_basis,  only: method_basis_t
     use slakos,        only: skf_store_t
     use readskf,       only: load_skf_store
-    use electronic,    only: hs_pair_integrals, binding_idx
-    use repulsive_skf, only: pair_repulsive
+    use electronic,    only: hs_pair_integrals, dhs_pair_integrals, binding_idx
+    use repulsive_skf, only: pair_repulsive, pair_repulsive_spline, &
+                              pair_repulsive_poly, pair_drepulsive
     use write_skf,     only: write_skf_summary
     use errors,        only: fatal
     implicit none
@@ -36,6 +37,8 @@ module skf
     public :: init, readslako
     public :: build_repulsion, build_electronic
     public :: get_repulsive, get_overlaps, get_hamiltonian
+    public :: get_repulsion_spline, get_repulsion_poly
+    public :: get_dhamiltonian, get_doverlaps, get_drepulsive
     public :: get_hubbard, get_eps, get_occupations
     public :: get_mass
     public :: nelements, element_symbol, element_index
@@ -103,11 +106,41 @@ contains
         character(len=*), intent(in) :: atom_A, atom_B
         real(wp),         intent(in) :: r
         real(wp) :: e
+        e = get_repulsion_spline(atom_A, atom_B, r)
+    end function get_repulsive
+
+
+    function get_repulsion_spline(atom_A, atom_B, r) result(e)
+        character(len=*), intent(in) :: atom_A, atom_B
+        real(wp),         intent(in) :: r
+        real(wp) :: e
         integer  :: ia, ib
         ia = element_index(atom_A)
         ib = element_index(atom_B)
-        e = pair_repulsive(store, ia, ib, r)
-    end function get_repulsive
+        e = pair_repulsive_spline(store, ia, ib, r)
+    end function get_repulsion_spline
+
+
+    function get_repulsion_poly(atom_A, atom_B, r) result(e)
+        character(len=*), intent(in) :: atom_A, atom_B
+        real(wp),         intent(in) :: r
+        real(wp) :: e
+        integer  :: ia, ib
+        ia = element_index(atom_A)
+        ib = element_index(atom_B)
+        e = pair_repulsive_poly(store, ia, ib, r)
+    end function get_repulsion_poly
+
+
+    function get_drepulsive(atom_A, atom_B, r) result(de)
+        character(len=*), intent(in) :: atom_A, atom_B
+        real(wp),         intent(in) :: r
+        real(wp) :: de
+        integer  :: ia, ib
+        ia = element_index(atom_A)
+        ib = element_index(atom_B)
+        de = pair_drepulsive(store, ia, ib, r)
+    end function get_drepulsive
 
 
     function get_overlaps(atom_A, atom_B, r, binding) result(s)
@@ -146,6 +179,44 @@ contains
             allocate(h(10)); h(:) = h_
         end if
     end function get_hamiltonian
+
+
+    function get_doverlaps(atom_A, atom_B, r, binding) result(ds)
+        character(len=*), intent(in)           :: atom_A, atom_B
+        real(wp),         intent(in)           :: r
+        character(len=*), intent(in), optional :: binding
+        real(wp), allocatable :: ds(:)
+        real(wp) :: dh_(10), ds_(10)
+        integer  :: ia, ib, k
+        ia = element_index(atom_A)
+        ib = element_index(atom_B)
+        call dhs_pair_integrals(store, ia, ib, r, dh_, ds_)
+        if (present(binding)) then
+            k = binding_idx(binding)
+            allocate(ds(1)); ds(1) = ds_(k)
+        else
+            allocate(ds(10)); ds(:) = ds_
+        end if
+    end function get_doverlaps
+
+
+    function get_dhamiltonian(atom_A, atom_B, r, binding) result(dh)
+        character(len=*), intent(in)           :: atom_A, atom_B
+        real(wp),         intent(in)           :: r
+        character(len=*), intent(in), optional :: binding
+        real(wp), allocatable :: dh(:)
+        real(wp) :: dh_(10), ds_(10)
+        integer  :: ia, ib, k
+        ia = element_index(atom_A)
+        ib = element_index(atom_B)
+        call dhs_pair_integrals(store, ia, ib, r, dh_, ds_)
+        if (present(binding)) then
+            k = binding_idx(binding)
+            allocate(dh(1)); dh(1) = dh_(k)
+        else
+            allocate(dh(10)); dh(:) = dh_
+        end if
+    end function get_dhamiltonian
 
 
     !> Hubbard du fichier homonucléaire (d, p, s).

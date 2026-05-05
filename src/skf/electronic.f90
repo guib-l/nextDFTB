@@ -6,12 +6,12 @@
 module electronic
     use kinds,  only: wp
     use slakos, only: skf_t, skf_store_t
-    use interp, only: hs_at_r
+    use interp, only: hs_at_r, dhs_at_r
     use errors, only: fatal
     implicit none
     private
 
-    public :: hs_pair_integrals
+    public :: hs_pair_integrals, dhs_pair_integrals
     public :: binding_idx
 
 contains
@@ -24,6 +24,16 @@ contains
         real(wp),          intent(out) :: h(10), s(10)
         call hs_at_r(store%pair(ea, eb), r, h, s)
     end subroutine hs_pair_integrals
+
+
+    !> Dérivée première par rapport à r des 10 intégrales SK (h, s).
+    subroutine dhs_pair_integrals(store, ea, eb, r, dh, ds)
+        type(skf_store_t), intent(in)  :: store
+        integer,           intent(in)  :: ea, eb
+        real(wp),          intent(in)  :: r
+        real(wp),          intent(out) :: dh(10), ds(10)
+        call dhs_at_r(store%pair(ea, eb), r, dh, ds)
+    end subroutine dhs_pair_integrals
 
 
     !> Index 1..10 de la table SKF correspondant au libellé `binding`.

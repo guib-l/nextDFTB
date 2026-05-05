@@ -5,7 +5,11 @@ slakoformat.pdf
 
 # AI special files
 .claude/
-*.md
+PLAN.md
+PYBIND.md
+CORRECTIF.md
+IMPROVE*.md
+CHRGML.md
 
 
 # Byte-compiled / optimized / DLL files

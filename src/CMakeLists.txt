@@ -26,6 +26,7 @@ add_executable(nextdftb
 
     skf/slakos.f90
     skf/readskf.f90
+    skf/polint.f90
     skf/interp.f90
     skf/electronic.f90
     skf/repulsive.f90
