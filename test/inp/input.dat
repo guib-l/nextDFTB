@@ -14,7 +14,7 @@ BASIS = {
 
 CALC = {
     DFTB = {
-        WRITE_MATRIX = False
+        WRITE_MATRIX = True 
         GAMMA = STDR
         SCHEM = {
             TYPE = SCC
