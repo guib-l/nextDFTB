@@ -14,8 +14,8 @@ class ElectronegativityNet(nn.Module):
         self.nets = nn.ModuleDict({
             sym: nn.Sequential(
                 nn.Linear(d_in, hidden), nn.SiLU(),
-                nn.Linear(hidden, hidden), nn.SiLU(),
-                nn.Linear(hidden, 1),
+                nn.Linear(hidden, int(hidden/2)), nn.SiLU(),
+                nn.Linear(int(hidden/2), 1),
             )
             for sym in elements
         })

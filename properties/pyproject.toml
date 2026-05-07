@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "charge_ml"
+version = "0.1.0"
+description = "Minimal NN model for atomic partial charges via per-species electronegativity + QEq."
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "torch",
+    "ase",
+    "dscribe",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["charge_ml*"]

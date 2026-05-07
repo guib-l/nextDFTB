@@ -29,7 +29,7 @@ def _make_predictor():
     desc = build_descriptor("acsf", ELEMENTS, **DESC_KW)
     Z, R = _water()
     d_in = featurize(desc, Z, R).shape[1]
-    chi_net = ElectronegativityNet(d_in=d_in, elements=ELEMENTS, hidden=8).double()
+    chi_net = ElectronegativityNet(d_in=d_in, elements=ELEMENTS, hidden=8)
     model = ChargeModel(chi_net, hardness=HUBBARD_DEFAULT, hubbard=HUBBARD_DEFAULT)
     return ChargePredictor(model, desc, ELEMENTS)
 
@@ -39,7 +39,7 @@ def test_conservation():
     Z, R = _water()
     for Q in (0.0, 1.0, -1.0):
         q = pred.predict(Z, R, Q_tot=Q)
-        assert abs(q.sum() - Q) < 1e-9
+        assert abs(q.sum() - Q) < 1e-5
 
 
 def test_invariance_translation_rotation():
@@ -77,13 +77,13 @@ def test_gradient_flows_through_qeq():
     Z_np, R_np = _water()
     X = featurize(desc, Z_np, R_np)
     d_in = X.shape[1]
-    chi_net = ElectronegativityNet(d_in=d_in, elements=ELEMENTS, hidden=8).double()
+    chi_net = ElectronegativityNet(d_in=d_in, elements=ELEMENTS, hidden=8)
     model = ChargeModel(chi_net, hardness=HUBBARD_DEFAULT, hubbard=HUBBARD_DEFAULT)
 
-    X_t = torch.from_numpy(np.asarray(X, dtype=np.float64))
-    R_t = torch.from_numpy(R_np.astype(np.float64))
+    X_t = torch.from_numpy(np.asarray(X, dtype=np.float32))
+    R_t = torch.from_numpy(R_np.astype(np.float32))
     Z_t = torch.from_numpy(Z_np)
-    q_ref = torch.tensor([-0.834, 0.417, 0.417], dtype=torch.float64)
+    q_ref = torch.tensor([-0.834, 0.417, 0.417], dtype=torch.float32)
 
     q = model(X_t, Z_t, R_t, 0.0)
     loss = ((q - q_ref) ** 2).mean()

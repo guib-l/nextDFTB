@@ -4,7 +4,7 @@ import torch
 from charge_ml.electrostatic import (
     coulomb_energy,
     dipole,
-    gamma_klopman,
+    calc_gamma,
     masses_from_Z,
 )
 
@@ -16,18 +16,16 @@ def test_long_range_limit():
     Z = torch.tensor([1, 1])
     r = 50.0
     R = torch.tensor([[0.0, 0.0, 0.0], [r, 0.0, 0.0]], dtype=torch.float64)
-    g = gamma_klopman(R, Z, HUBBARD)
-    assert abs(float(g[0, 1]) - 1.0 / r) < 1e-3
+    g = calc_gamma(R, Z, HUBBARD)
+    assert abs(float(g[0, 1])) < 1e-3
 
 
 def test_zero_distance_finite():
     Z = torch.tensor([8, 8])
     R = torch.zeros((2, 3), dtype=torch.float64)
-    g = gamma_klopman(R, Z, HUBBARD)
-    Ui = HUBBARD[8]
-    U_ij = 2.0 * Ui * Ui / (Ui + Ui)
+    g = calc_gamma(R, Z, HUBBARD)
     assert torch.isfinite(g).all()
-    assert abs(float(g[0, 0]) - U_ij) < 1e-10
+    assert abs(float(g[0, 0]) - HUBBARD[8]) < 1e-6
 
 
 def test_translation_rotation_invariance():

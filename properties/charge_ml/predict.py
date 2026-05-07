@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from ase.data import chemical_symbols, atomic_masses
 
+from .data import numpy_to_torch
 from .features import build_descriptor, featurize
 from .model import ChargeModel, ElectronegativityNet
 from . import electrostatic as es
@@ -21,7 +22,7 @@ class ChargePredictor:
         desc = build_descriptor(ckpt["desc_kind"], ckpt["elements"], **ckpt["desc_kwargs"])
         chi_net = ElectronegativityNet(
             d_in=ckpt["d_in"], elements=ckpt["elements"], hidden=ckpt["hidden"],
-        ).double()
+        )
         model = ChargeModel(chi_net, hardness=ckpt["hardness"], hubbard=ckpt["hubbard"])
         model.load_state_dict(ckpt["state_dict"])
         return cls(model, desc, ckpt["elements"])
@@ -40,12 +41,12 @@ class ChargePredictor:
 
     def predict(self, Z: np.ndarray, R: np.ndarray, Q_tot: float = 0.0) -> np.ndarray:
         Z = np.asarray(Z)
-        R = np.asarray(R, dtype=np.float64)
+        R = np.asarray(R, dtype=np.float32)
         self._check(Z, R)
         X = featurize(self.desc, Z, R)
-        X_t = torch.from_numpy(np.asarray(X, dtype=np.float64))
-        R_t = torch.from_numpy(R)
-        Z_t = torch.from_numpy(Z)
+        X_t = numpy_to_torch(X)
+        R_t = numpy_to_torch(R)
+        Z_t = numpy_to_torch(Z)
         with torch.no_grad():
             q = self.model(X_t, Z_t, R_t, float(Q_tot))
         return q.numpy()
@@ -53,14 +54,15 @@ class ChargePredictor:
     def dipole(self, Z: np.ndarray, R: np.ndarray, Q_tot: float = 0.0) -> np.ndarray:
         q = self.predict(Z, R, Q_tot)
         Z = np.asarray(Z)
-        R_t = torch.from_numpy(np.asarray(R, dtype=np.float64))
-        q_t = torch.from_numpy(np.asarray(q, dtype=np.float64))
-        masses = torch.tensor([atomic_masses[int(z)] for z in Z], dtype=torch.float64)
+        R_t = numpy_to_torch(np.asarray(R, dtype=np.float32))
+        q_t = numpy_to_torch(np.asarray(q, dtype=np.float32))
+        masses = torch.tensor([atomic_masses[int(z)] for z in Z],
+                              dtype=R_t.dtype)
         return es.dipole(q_t, R_t, masses).numpy()
 
     def coulomb_energy(self, Z: np.ndarray, R: np.ndarray, Q_tot: float = 0.0) -> float:
         q = self.predict(Z, R, Q_tot)
-        Z_t = torch.from_numpy(np.asarray(Z))
-        R_t = torch.from_numpy(np.asarray(R, dtype=np.float64))
-        q_t = torch.from_numpy(np.asarray(q, dtype=np.float64))
+        Z_t = numpy_to_torch(np.asarray(Z))
+        R_t = numpy_to_torch(np.asarray(R, dtype=np.float32))
+        q_t = numpy_to_torch(np.asarray(q, dtype=np.float32))
         return float(es.coulomb_energy(q_t, R_t, Z_t, self.model.hubbard))

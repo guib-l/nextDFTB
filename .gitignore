@@ -9,7 +9,13 @@ PLAN.md
 PYBIND.md
 CORRECTIF.md
 IMPROVE*.md
-CHRGML.md
+CHRGML_1.md
+CHRGML_2.md
+
+
+# Properties spec
+*.xyz
+*.pt
 
 
 # Byte-compiled / optimized / DLL files

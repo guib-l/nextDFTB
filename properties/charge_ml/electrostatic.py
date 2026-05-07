@@ -1,32 +1,71 @@
+import numpy as np
 import torch
 from torch import Tensor
 
 from ase.data import atomic_masses
 
-
-HUBBARD_DEFAULT: dict[int, float] = {
-    1: 0.4196, 6: 0.3647, 7: 0.4309, 8: 0.4954,
-}
+from .default import DEFAULT_HUBBARD
 
 
-def _hubbard_pair(Z: Tensor, hubbard: dict[int, float]) -> Tensor:
-    U = torch.tensor([hubbard[int(z)] for z in Z], dtype=torch.float64)
-    Ui = U.unsqueeze(0)
-    Uj = U.unsqueeze(1)
-    return 2.0 * Ui * Uj / (Ui + Uj)
+HUBBARD_DEFAULT: dict[int, float] = dict(DEFAULT_HUBBARD)
 
 
-def gamma_klopman(R: Tensor, Z: Tensor, hubbard: dict[int, float]) -> Tensor:
-    R = R.to(torch.float64)
-    Z = torch.as_tensor(Z)
-    rij = torch.cdist(R, R)
-    U_ij = _hubbard_pair(Z, hubbard).to(R.dtype)
-    return 1.0 / torch.sqrt(rij ** 2 + (1.0 / U_ij) ** 2)
+def Gamma(rab: float, Ua: float, Ub: float) -> float:
+    """Noyau gamma DFTB (variante stdr) entre deux atomes A et B.
+
+    Calcule la valeur scalaire gamma_AB pour une distance rab et des
+    paramètres de Hubbard Ua, Ub. Les valeurs renvoyées sont positives.
+    """
+    def _gamma_e(r: float, a: float, b: float) -> float:
+        d = a * a - b * b
+        return np.exp(-a * r) * (
+            (0.5 * b ** 4 * a) / (d ** 2)
+            - (b ** 6 - 3.0 * b ** 4 * a ** 2) / (r * d ** 3)
+        )
+
+    eq = abs(Ua - Ub) < 1e-6
+    tauA, tauB = 3.2 * Ua, 3.2 * Ub
+
+    if rab < 1e-6:
+        if eq:
+            return 0.5 * (Ua + Ub)
+        return 0.5 * (
+            (tauA * tauB) / (tauA + tauB)
+            + (tauA * tauB) ** 2 / (tauA + tauB) ** 3
+        )
+    if eq:
+        tauM = 0.5 * (tauA + tauB)
+        return float(
+            np.exp(-tauM * rab) * (
+                1.0 / rab
+                + 0.6875 * tauM
+                + 0.1875 * rab * tauM ** 2
+                + 0.0208333333333 * rab ** 2 * tauM ** 3
+            )
+        )
+    return float(_gamma_e(rab, tauA, tauB) + _gamma_e(rab, tauB, tauA))
+
+
+def calc_gamma(R: Tensor, Z, hubbard: dict[int, float]) -> Tensor:
+    """Construit la matrice gamma (n, n) symétrique via Gamma(rab, Ua, Ub)."""
+    R_t = R if torch.is_tensor(R) else torch.as_tensor(R)
+    Z_t = torch.as_tensor(Z)
+    n = R_t.shape[0]
+    R_np = R_t.detach().cpu().numpy()
+    u_list = [hubbard[int(z)] for z in Z_t]
+    G = np.zeros((n, n), dtype=np.float32)
+    for i in range(n):
+        for j in range(i, n):
+            rij = float(np.linalg.norm(R_np[i] - R_np[j]))
+            v = Gamma(rij, u_list[i], u_list[j])
+            G[i, j] = v
+            G[j, i] = v
+    return torch.from_numpy(G).to(dtype=R_t.dtype, device=R_t.device)
 
 
 def coulomb_energy(q: Tensor, R: Tensor, Z: Tensor,
                    hubbard: dict[int, float]) -> Tensor:
-    g = gamma_klopman(R, Z, hubbard)
+    g = calc_gamma(R, Z, hubbard).to(q.dtype)
     n = q.shape[0]
     mask = 1.0 - torch.eye(n, dtype=g.dtype, device=g.device)
     qq = q.unsqueeze(0) * q.unsqueeze(1)
@@ -51,7 +90,7 @@ def qeq_solve(R: Tensor, Z, Q_tot: float, chi: Tensor,
               hubbard: dict[int, float]) -> Tensor:
     Z_t = torch.as_tensor(Z)
     n = R.shape[0]
-    g = gamma_klopman(R, Z_t, hubbard).to(chi.dtype)
+    g = calc_gamma(R, Z_t, hubbard).to(chi.dtype)
     diag = torch.tensor([hardness[int(z)] for z in Z_t],
                         dtype=chi.dtype, device=chi.device)
     A = g - torch.diag(torch.diagonal(g)) + torch.diag(diag)
