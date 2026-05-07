@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from charge_ml import ChargeML
+from charge_ml.default import DEFAULT_CHARGES
 
 
 HERE = Path(__file__).resolve().parent

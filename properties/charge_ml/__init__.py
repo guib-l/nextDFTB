@@ -12,6 +12,7 @@ from .electrostatic import (
     calc_gamma,
     coulomb_energy,
     dipole,
+    qeq_charges,
     qeq_solve,
     HUBBARD_DEFAULT,
 )

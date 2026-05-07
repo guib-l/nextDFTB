@@ -13,9 +13,9 @@ from charge_ml import ChargeML
 
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]               # racine du projet nextDFTB
-DATA_DIR = ROOT                       # h2o_data_*.xyz à la racine
-OUT_DIR = HERE / "data" / "_out"      # sortie de save_data / save_dataset
+ROOT = HERE.parents[1]         
+DATA_DIR = ROOT              
+OUT_DIR = HERE / "data"     
 MODEL_DIR = HERE / "model"
 
 

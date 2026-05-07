@@ -85,6 +85,33 @@ def masses_from_Z(Z: Tensor) -> Tensor:
     return torch.tensor([atomic_masses[int(z)] for z in Z], dtype=torch.float64)
 
 
+def qeq_charges(R, Z, Q_tot: float,
+                chi: "dict[int, float] | Tensor",
+                hardness: "dict[int, float] | None" = None,
+                hubbard: "dict[int, float] | None" = None) -> Tensor:
+    """Charges QEq pour un chi fourni par l'utilisateur (sans NN).
+
+    Paramètres
+    ----------
+    R, Z : géométrie (positions et numéros atomiques).
+    Q_tot : charge totale imposée.
+    chi : électronégativité par espèce ({Z: chi}) ou par atome (tensor (n,)).
+    hardness, hubbard : valeurs par défaut DEFAULT_HUBBARD si None.
+    """
+    Z_t = torch.as_tensor(Z, dtype=torch.long)
+    R_t = R if torch.is_tensor(R) else torch.as_tensor(R, dtype=torch.float32)
+    if isinstance(chi, dict):
+        chi_t = torch.tensor([chi[int(z)] for z in Z_t], dtype=R_t.dtype)
+    else:
+        chi_t = chi.to(R_t.dtype) if torch.is_tensor(chi) \
+                else torch.as_tensor(chi, dtype=R_t.dtype)
+    if hardness is None:
+        hardness = dict(HUBBARD_DEFAULT)
+    if hubbard is None:
+        hubbard = dict(HUBBARD_DEFAULT)
+    return qeq_solve(R_t, Z_t, float(Q_tot), chi_t, hardness, hubbard)
+
+
 def qeq_solve(R: Tensor, Z, Q_tot: float, chi: Tensor,
               hardness: dict[int, float],
               hubbard: dict[int, float]) -> Tensor:

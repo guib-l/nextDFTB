@@ -14,9 +14,8 @@ from charge_ml.default import DEFAULT_CHARGES
 
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
 MODEL_PATH = HERE / "model" / "checkpoint.pt"
-XYZ_PATH = ROOT / "h2o_data_01.xyz"
+XYZ_PATH = HERE / "data" / "h2o_data_01.xyz"
 
 
 def main() -> None:
