@@ -5,7 +5,8 @@ import torch
 from ase.data import chemical_symbols
 
 from .data import numpy_to_torch, split_data_ttv
-from .default import DEFAULT_DESC, DEFAULT_EPOCH, DEFAULT_HUBBARD
+from .default import (DEFAULT_DESC, DEFAULT_EPOCH, 
+                      DEFAULT_HUBBARD, DEFAULT_BATCH)
 from .display import print_epoch
 from .features import build_descriptor, featurize
 from .metric import metric_mae, metric_mse
@@ -36,17 +37,22 @@ def _train_one_epoch(model, samples, feats_by_idx, opt, rng, device):
     order = list(range(len(samples)))
     rng.shuffle(order)
     loss_sum = 0.0
-    for i in order:
+    for batch,i in enumerate(order):
+        if batch%DEFAULT_BATCH==0:
+            opt.zero_grad()
+
         s = samples[i]
         X = numpy_to_torch(feats_by_idx[i]).to(device)
         R = numpy_to_torch(s["R"]).to(device)
         Z = numpy_to_torch(s["Z"]).to(device)
         q_ref = numpy_to_torch(s["q_ref"]).to(device)
+
         q_pred = model(X, Z, R, float(s["Q_tot"]))
         loss = metric_mse(q_pred, q_ref)
-        opt.zero_grad()
+        
         loss.backward()
-        opt.step()
+        if batch%DEFAULT_BATCH==0:
+            opt.step()
         loss_sum += float(loss.detach())
     return loss_sum / max(1, len(samples))
 

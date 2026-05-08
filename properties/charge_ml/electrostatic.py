@@ -118,9 +118,9 @@ def qeq_solve(R: Tensor, Z, Q_tot: float, chi: Tensor,
     Z_t = torch.as_tensor(Z)
     n = R.shape[0]
     g = calc_gamma(R, Z_t, hubbard).to(chi.dtype)
-    diag = torch.tensor([hardness[int(z)] for z in Z_t],
-                        dtype=chi.dtype, device=chi.device)
-    A = g - torch.diag(torch.diagonal(g)) + torch.diag(diag)
+    #diag = torch.tensor([hardness[int(z)] for z in Z_t],
+    #                    dtype=chi.dtype, device=chi.device)
+    A = g #- torch.diag(torch.diagonal(g)) + torch.diag(diag)
     M = torch.zeros((n + 1, n + 1), dtype=chi.dtype, device=chi.device)
     M[:n, :n] = A
     M[:n, n] = 1.0

@@ -9,13 +9,15 @@ from pathlib import Path
 import numpy as np
 
 from charge_ml import ChargeML
-from charge_ml.data import _parse_xyz_frames
+from charge_ml.data import _parse_xyz_frames,load_xyz_dataset
 from charge_ml.default import DEFAULT_CHARGES
 
 
 HERE = Path(__file__).resolve().parent
 MODEL_PATH = HERE / "model" / "checkpoint.pt"
-XYZ_PATH = HERE / "data" / "h2o_data_01.xyz"
+XYZ_PATH = HERE / "data" 
+
+FRAME_INDEX = 1587
 
 
 def main() -> None:
@@ -28,8 +30,10 @@ def main() -> None:
     ml.load_model(MODEL_PATH)
     print(f"modèle chargé (target={ml.target}, elements={ml.elements})")
 
-    # Première frame du fichier h2o_data_01.xyz
-    Z, R, q_ref = next(_parse_xyz_frames(XYZ_PATH))
+    samples = load_xyz_dataset(XYZ_PATH, target="q", reference=DEFAULT_CHARGES)
+    s = samples[FRAME_INDEX]
+    Z, R, q_ref = s["Z"], s["R"], s["q_ref"]
+
     Q_tot = float(q_ref.sum())
     if ml.target == "dq" and ml.reference is not None:
         ref = np.array([ml.reference[int(z)] for z in Z], dtype=np.float32)

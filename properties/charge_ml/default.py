@@ -3,9 +3,9 @@
 
 DEFAULT_DESC: dict = dict(
     kind="soap",
-    r_cut=16.0,
-    n_max = 4,
-    l_max = 3,
+    r_cut=8.0,
+    n_max = 6,
+    l_max = 5,
 )
 
 DEFAULT_HUBBARD: dict[int, float] = {

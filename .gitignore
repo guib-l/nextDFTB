@@ -16,7 +16,7 @@ CHRGML_2.md
 # Properties spec
 *.xyz
 *.pt
-
+*.tmp
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

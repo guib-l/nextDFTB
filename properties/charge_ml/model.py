@@ -15,7 +15,8 @@ class ElectronegativityNet(nn.Module):
             sym: nn.Sequential(
                 nn.Linear(d_in, hidden), nn.Tanh(),
                 nn.Linear(hidden, int(hidden/2)), nn.Tanh(),
-                nn.Linear(int(hidden/2), 1),
+                nn.Linear(int(hidden/2), int(hidden/4)), nn.Tanh(),
+                nn.Linear(int(hidden/4), 1),
             )
             for sym in elements
         })
