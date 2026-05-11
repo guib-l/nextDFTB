@@ -18,14 +18,12 @@ CALC = {
         GAMMA = STDR
         SCHEM = {
             TYPE = SCC
-            MAXSCC = 100
+            MAXSCC = 999
             TOLSCC = 1e-7
         }
         MIXING = {
             TYPE = BROYDEN
             FACTOR = 0.1
-            HISTORY = 6
-            OMEGA0 = 0.01
         }
         # MIXING = {
         #     TYPE = SIMPLE      # SIMPLE | RANDOM | BROYDEN

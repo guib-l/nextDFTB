@@ -35,7 +35,7 @@ contains
         call window_indices(skf, r, i0)
 
         do k = 1, n_order_polint
-            xa(k) = real(i0 + k - 2, wp) * skf%dr
+            xa(k) = real(i0 + k - 1, wp) * skf%dr
         end do
 
         do c = 1, SKF_NHS
@@ -70,7 +70,7 @@ contains
         call window_indices(skf, r, i0)
 
         do k = 1, n_order_polint
-            xa(k) = real(i0 + k - 2, wp) * skf%dr
+            xa(k) = real(i0 + k - 1, wp) * skf%dr
         end do
 
         do c = 1, SKF_NHS

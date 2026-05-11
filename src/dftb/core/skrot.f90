@@ -8,282 +8,676 @@
 !>   1=s, 2=px, 3=py, 4=pz,
 !>   5=dxy, 6=dyz, 7=dzx, 8=dx2−y2, 9=d3z2−r2
 !>
-!> Les directions sont exprimées en cosinus directeurs (l, m, n) avec
-!> α = l²+m², β = l²−m². Référence : Slater & Koster Phys. Rev. 94,
+!> Les directions sont exprimées en cosinus directeurs (x, y, z) avec
+!> α = x²+y², β = x²−y². Référence : Slater & Koster Phys. Rev. 94,
 !> 1498 (1954), Table I.
 module skrot
     use kinds, only: wp
     implicit none
     private
 
-    public :: sk_block
+    public :: transform_sk, transform_sk_opt
 
     real(wp), parameter :: SQRT3 = 1.7320508075688772_wp
 
 contains
 
-    !> Construit les blocs (na × nb) de H et S pour une paire d'atomes.
-    !>
-    !>   h_ab, s_ab : intégrales SK lues de A→B (10 valeurs chacune)
-    !>   h_ba, s_ba : intégrales SK lues de B→A (utilisées pour les
-    !>                composantes asymétriques où l_A ≠ l_B)
-    !>   dir(3)     : vecteur unitaire A → B
-    !>   na, nb     : nombre d'orbitales (1, 4 ou 9)
-    subroutine sk_block(h_ab, s_ab, h_ba, s_ba, dir, na, nb, hb, sb)
-        real(wp), intent(in)  :: h_ab(10), s_ab(10)
-        real(wp), intent(in)  :: h_ba(10), s_ba(10)
-        real(wp), intent(in)  :: dir(3)
-        integer,  intent(in)  :: na, nb
-        real(wp), intent(out) :: hb(:,:), sb(:,:)
+    !> Retourne l'élément (mu, nu) du bloc rotationné Slater-Koster pour
+    !> une paire d'atomes A (en 0) et B (en R), où :
+    !>   x, y, z : cosinus directeurs du vecteur unitaire A → B
+    !>   mu, nu  : indices d'orbitales (1..9) sur A et B
+    !>   sk_ab   : 10 intégrales SK lues A → B
+    !>   sk_ba   : 10 intégrales SK lues B → A (utilisées pour les
+    !>             composantes asymétriques où l_A ≠ l_B, avec
+    !>             le signe (-1)^(l_A+l_B))
+    pure function transform_sk(x, y, z, mu, nu, sk_ab, sk_ba) result(v)
+        real(wp), intent(in) :: x, y, z
+        integer,  intent(in) :: mu, nu
+        real(wp), intent(in) :: sk_ab(10), sk_ba(10)
+        real(wp) :: v
+        real(wp) :: alpha, beta, z2
 
-        real(wp) :: l_, m_, n_
+        alpha = x*x + y*y
+        beta  = x*x - y*y
+        z2    = z*z
+        v     = 0.0_wp
 
-        hb = 0.0_wp; sb = 0.0_wp
-        l_ = dir(1); m_ = dir(2); n_ = dir(3)
+        select case (mu)
 
-        call rotate_one(h_ab, h_ba, l_, m_, n_, na, nb, hb)
-        call rotate_one(s_ab, s_ba, l_, m_, n_, na, nb, sb)
-    end subroutine sk_block
+        ! --------------------------------------------------------------
+        case (1)  ! s
+            select case (nu)
+            case (1)  ! s ↔ s
+                v = sk_ab(10)
+            case (2)  ! s ↔ px
+                v = x * sk_ab(9)
+            case (3)  ! s ↔ py
+                v = y * sk_ab(9)
+            case (4)  ! s ↔ pz
+                v = z * sk_ab(9)
+            case (5)  ! s ↔ dxy
+                v = SQRT3 * x * y * sk_ab(8)
+            case (6)  ! s ↔ dyz
+                v = SQRT3 * y * z * sk_ab(8)
+            case (7)  ! s ↔ dzx
+                v = SQRT3 * z * x * sk_ab(8)
+            case (8)  ! s ↔ dx2-y2
+                v = 0.5_wp * SQRT3 * beta * sk_ab(8)
+            case (9)  ! s ↔ d3z2-r2
+                v = (z2 - 0.5_wp * alpha) * sk_ab(8)
+            end select
+
+        ! --------------------------------------------------------------
+        case (2)  ! px
+            select case (nu)
+            case (1)  ! px ↔ s : signe (-1)^(1+0) = -1, sk_ba
+                v = -x * sk_ba(9)
+            case (2)  ! px ↔ px
+                v = x*x * sk_ab(6) + (1.0_wp - x*x) * sk_ab(7)
+            case (3)  ! px ↔ py
+                v = x*y * (sk_ab(6) - sk_ab(7))
+            case (4)  ! px ↔ pz
+                v = x*z * (sk_ab(6) - sk_ab(7))
+            case (5)  ! px ↔ dxy
+                v = SQRT3 * x*x * y * sk_ab(4) &
+                    + y * (1.0_wp - 2.0_wp*x*x) * sk_ab(5)
+            case (6)  ! px ↔ dyz
+                v = SQRT3 * x * y * z * sk_ab(4) &
+                    - 2.0_wp * x * y * z * sk_ab(5)
+            case (7)  ! px ↔ dzx
+                v = SQRT3 * x*x * z * sk_ab(4) &
+                    + z * (1.0_wp - 2.0_wp*x*x) * sk_ab(5)
+            case (8)  ! px ↔ dx2-y2
+                v = 0.5_wp * SQRT3 * x * beta * sk_ab(4) &
+                    + x * (1.0_wp - beta) * sk_ab(5)
+            case (9)  ! px ↔ d3z2-r2
+                v = x * (z2 - 0.5_wp*alpha) * sk_ab(4) &
+                    - SQRT3 * x * z2 * sk_ab(5)
+            end select
+
+        ! --------------------------------------------------------------
+        case (3)  ! py
+            select case (nu)
+            case (1)  ! py ↔ s : signe -1, sk_ba
+                v = -y * sk_ba(9)
+            case (2)  ! py ↔ px
+                v = x*y * (sk_ab(6) - sk_ab(7))
+            case (3)  ! py ↔ py
+                v = y*y * sk_ab(6) + (1.0_wp - y*y) * sk_ab(7)
+            case (4)  ! py ↔ pz
+                v = y*z * (sk_ab(6) - sk_ab(7))
+            case (5)  ! py ↔ dxy
+                v = SQRT3 * y*y * x * sk_ab(4) &
+                    + x * (1.0_wp - 2.0_wp*y*y) * sk_ab(5)
+            case (6)  ! py ↔ dyz
+                v = SQRT3 * y*y * z * sk_ab(4) &
+                    + z * (1.0_wp - 2.0_wp*y*y) * sk_ab(5)
+            case (7)  ! py ↔ dzx
+                v = SQRT3 * x * y * z * sk_ab(4) &
+                    - 2.0_wp * x * y * z * sk_ab(5)
+            case (8)  ! py ↔ dx2-y2
+                v = 0.5_wp * SQRT3 * y * beta * sk_ab(4) &
+                    - y * (1.0_wp + beta) * sk_ab(5)
+            case (9)  ! py ↔ d3z2-r2
+                v = y * (z2 - 0.5_wp*alpha) * sk_ab(4) &
+                    - SQRT3 * y * z2 * sk_ab(5)
+            end select
+
+        ! --------------------------------------------------------------
+        case (4)  ! pz
+            select case (nu)
+            case (1)  ! pz ↔ s : signe -1, sk_ba
+                v = -z * sk_ba(9)
+            case (2)  ! pz ↔ px
+                v = x*z * (sk_ab(6) - sk_ab(7))
+            case (3)  ! pz ↔ py
+                v = y*z * (sk_ab(6) - sk_ab(7))
+            case (4)  ! pz ↔ pz
+                v = z*z * sk_ab(6) + (1.0_wp - z*z) * sk_ab(7)
+            case (5)  ! pz ↔ dxy
+                v = SQRT3 * x * y * z * sk_ab(4) &
+                    - 2.0_wp * x * y * z * sk_ab(5)
+            case (6)  ! pz ↔ dyz
+                v = SQRT3 * z*z * y * sk_ab(4) &
+                    + y * (1.0_wp - 2.0_wp*z*z) * sk_ab(5)
+            case (7)  ! pz ↔ dzx
+                v = SQRT3 * z*z * x * sk_ab(4) &
+                    + x * (1.0_wp - 2.0_wp*z*z) * sk_ab(5)
+            case (8)  ! pz ↔ dx2-y2
+                v = 0.5_wp * SQRT3 * z * beta * sk_ab(4) &
+                    - z * beta * sk_ab(5)
+            case (9)  ! pz ↔ d3z2-r2
+                v = z * (z2 - 0.5_wp*alpha) * sk_ab(4) &
+                    + SQRT3 * z * alpha * sk_ab(5)
+            end select
+
+        ! --------------------------------------------------------------
+        case (5)  ! dxy
+            select case (nu)
+            case (1)  ! dxy ↔ s : signe (-1)^(2+0) = +1, sk_ba
+                v = SQRT3 * x * y * sk_ba(8)
+            case (2)  ! dxy ↔ px : signe (-1)^(2+1) = -1, sk_ba
+                v = -(SQRT3 * x*x * y * sk_ba(4) &
+                      + y * (1.0_wp - 2.0_wp*x*x) * sk_ba(5))
+            case (3)  ! dxy ↔ py
+                v = -(SQRT3 * y*y * x * sk_ba(4) &
+                      + x * (1.0_wp - 2.0_wp*y*y) * sk_ba(5))
+            case (4)  ! dxy ↔ pz
+                v = -(SQRT3 * x * y * z * sk_ba(4) &
+                      - 2.0_wp * x * y * z * sk_ba(5))
+            case (5)  ! dxy ↔ dxy
+                v = 3.0_wp*x*x*y*y * sk_ab(1) &
+                    + (alpha - 4.0_wp*x*x*y*y) * sk_ab(2) &
+                    + (z2 + x*x*y*y) * sk_ab(3)
+            case (6)  ! dxy ↔ dyz
+                v = 3.0_wp*x*y*y*z * sk_ab(1) &
+                    + x*z*(1.0_wp - 4.0_wp*y*y) * sk_ab(2) &
+                    + x*z*(y*y - 1.0_wp) * sk_ab(3)
+            case (7)  ! dxy ↔ dzx
+                v = 3.0_wp*x*x*y*z * sk_ab(1) &
+                    + y*z*(1.0_wp - 4.0_wp*x*x) * sk_ab(2) &
+                    + y*z*(x*x - 1.0_wp) * sk_ab(3)
+            case (8)  ! dxy ↔ dx2-y2
+                v = 1.5_wp * x*y * beta * sk_ab(1) &
+                    - 2.0_wp * x*y * beta * sk_ab(2) &
+                    + 0.5_wp * x*y * beta * sk_ab(3)
+            case (9)  ! dxy ↔ d3z2-r2
+                v = SQRT3 * x*y * (z2 - 0.5_wp*alpha) * sk_ab(1) &
+                    - 2.0_wp * SQRT3 * x*y * z2 * sk_ab(2) &
+                    + 0.5_wp * SQRT3 * x*y * (1.0_wp + z2) * sk_ab(3)
+            end select
+
+        ! --------------------------------------------------------------
+        case (6)  ! dyz
+            select case (nu)
+            case (1)  ! dyz ↔ s : signe +1, sk_ba
+                v = SQRT3 * y * z * sk_ba(8)
+            case (2)  ! dyz ↔ px : signe -1, sk_ba
+                v = -(SQRT3 * x * y * z * sk_ba(4) &
+                      - 2.0_wp * x * y * z * sk_ba(5))
+            case (3)  ! dyz ↔ py
+                v = -(SQRT3 * y*y * z * sk_ba(4) &
+                      + z * (1.0_wp - 2.0_wp*y*y) * sk_ba(5))
+            case (4)  ! dyz ↔ pz
+                v = -(SQRT3 * z*z * y * sk_ba(4) &
+                      + y * (1.0_wp - 2.0_wp*z*z) * sk_ba(5))
+            case (5)  ! dyz ↔ dxy : symétrie => même formule que dxy/dyz
+                v = 3.0_wp*x*y*y*z * sk_ab(1) &
+                    + x*z*(1.0_wp - 4.0_wp*y*y) * sk_ab(2) &
+                    + x*z*(y*y - 1.0_wp) * sk_ab(3)
+            case (6)  ! dyz ↔ dyz
+                v = 3.0_wp*y*y*z*z * sk_ab(1) &
+                    + (y*y + z*z - 4.0_wp*y*y*z*z) * sk_ab(2) &
+                    + (x*x + y*y*z*z) * sk_ab(3)
+            case (7)  ! dyz ↔ dzx
+                v = 3.0_wp*x*y*z*z * sk_ab(1) &
+                    + x*y*(1.0_wp - 4.0_wp*z*z) * sk_ab(2) &
+                    + x*y*(z*z - 1.0_wp) * sk_ab(3)
+            case (8)  ! dyz ↔ dx2-y2
+                v = 1.5_wp * y*z * beta * sk_ab(1) &
+                    - y*z*(1.0_wp + 2.0_wp*beta) * sk_ab(2) &
+                    + y*z*(1.0_wp + 0.5_wp*beta) * sk_ab(3)
+            case (9)  ! dyz ↔ d3z2-r2
+                v = SQRT3 * y*z * (z2 - 0.5_wp*alpha) * sk_ab(1) &
+                    + SQRT3 * y*z * (alpha - z2) * sk_ab(2) &
+                    - 0.5_wp * SQRT3 * y*z * alpha * sk_ab(3)
+            end select
+
+        ! --------------------------------------------------------------
+        case (7)  ! dzx
+            select case (nu)
+            case (1)  ! dzx ↔ s
+                v = SQRT3 * z * x * sk_ba(8)
+            case (2)  ! dzx ↔ px
+                v = -(SQRT3 * x*x * z * sk_ba(4) &
+                      + z * (1.0_wp - 2.0_wp*x*x) * sk_ba(5))
+            case (3)  ! dzx ↔ py
+                v = -(SQRT3 * x * y * z * sk_ba(4) &
+                      - 2.0_wp * x * y * z * sk_ba(5))
+            case (4)  ! dzx ↔ pz
+                v = -(SQRT3 * z*z * x * sk_ba(4) &
+                      + x * (1.0_wp - 2.0_wp*z*z) * sk_ba(5))
+            case (5)  ! dzx ↔ dxy
+                v = 3.0_wp*x*x*y*z * sk_ab(1) &
+                    + y*z*(1.0_wp - 4.0_wp*x*x) * sk_ab(2) &
+                    + y*z*(x*x - 1.0_wp) * sk_ab(3)
+            case (6)  ! dzx ↔ dyz
+                v = 3.0_wp*x*y*z*z * sk_ab(1) &
+                    + x*y*(1.0_wp - 4.0_wp*z*z) * sk_ab(2) &
+                    + x*y*(z*z - 1.0_wp) * sk_ab(3)
+            case (7)  ! dzx ↔ dzx
+                v = 3.0_wp*z*z*x*x * sk_ab(1) &
+                    + (z*z + x*x - 4.0_wp*z*z*x*x) * sk_ab(2) &
+                    + (y*y + z*z*x*x) * sk_ab(3)
+            case (8)  ! dzx ↔ dx2-y2
+                v = 1.5_wp * z*x * beta * sk_ab(1) &
+                    + z*x * (1.0_wp - 2.0_wp*beta) * sk_ab(2) &
+                    - z*x * (1.0_wp - 0.5_wp*beta) * sk_ab(3)
+            case (9)  ! dzx ↔ d3z2-r2
+                v = SQRT3 * z*x * (z2 - 0.5_wp*alpha) * sk_ab(1) &
+                    + SQRT3 * z*x * (alpha - z2) * sk_ab(2) &
+                    - 0.5_wp * SQRT3 * z*x * alpha * sk_ab(3)
+            end select
+
+        ! --------------------------------------------------------------
+        case (8)  ! dx2-y2
+            select case (nu)
+            case (1)  ! dx2-y2 ↔ s
+                v = 0.5_wp * SQRT3 * beta * sk_ba(8)
+            case (2)  ! dx2-y2 ↔ px
+                v = -(0.5_wp * SQRT3 * x * beta * sk_ba(4) &
+                      + x * (1.0_wp - beta) * sk_ba(5))
+            case (3)  ! dx2-y2 ↔ py
+                v = -(0.5_wp * SQRT3 * y * beta * sk_ba(4) &
+                      - y * (1.0_wp + beta) * sk_ba(5))
+            case (4)  ! dx2-y2 ↔ pz
+                v = -(0.5_wp * SQRT3 * z * beta * sk_ba(4) &
+                      - z * beta * sk_ba(5))
+            case (5)  ! dx2-y2 ↔ dxy
+                v = 1.5_wp * x*y * beta * sk_ab(1) &
+                    - 2.0_wp * x*y * beta * sk_ab(2) &
+                    + 0.5_wp * x*y * beta * sk_ab(3)
+            case (6)  ! dx2-y2 ↔ dyz
+                v = 1.5_wp * y*z * beta * sk_ab(1) &
+                    - y*z*(1.0_wp + 2.0_wp*beta) * sk_ab(2) &
+                    + y*z*(1.0_wp + 0.5_wp*beta) * sk_ab(3)
+            case (7)  ! dx2-y2 ↔ dzx
+                v = 1.5_wp * z*x * beta * sk_ab(1) &
+                    + z*x * (1.0_wp - 2.0_wp*beta) * sk_ab(2) &
+                    - z*x * (1.0_wp - 0.5_wp*beta) * sk_ab(3)
+            case (8)  ! dx2-y2 ↔ dx2-y2
+                v = 0.75_wp * beta*beta * sk_ab(1) &
+                    + (alpha - beta*beta) * sk_ab(2) &
+                    + (z2 + 0.25_wp * beta*beta) * sk_ab(3)
+            case (9)  ! dx2-y2 ↔ d3z2-r2
+                v = 0.5_wp * SQRT3 * beta * (z2 - 0.5_wp*alpha) * sk_ab(1) &
+                    - SQRT3 * z2 * beta * sk_ab(2) &
+                    + 0.25_wp * SQRT3 * (1.0_wp + z2) * beta * sk_ab(3)
+            end select
+
+        ! --------------------------------------------------------------
+        case (9)  ! d3z2-r2
+            select case (nu)
+            case (1)  ! d3z2-r2 ↔ s
+                v = (z2 - 0.5_wp * alpha) * sk_ba(8)
+            case (2)  ! d3z2-r2 ↔ px
+                v = -(x * (z2 - 0.5_wp*alpha) * sk_ba(4) &
+                      - SQRT3 * x * z2 * sk_ba(5))
+            case (3)  ! d3z2-r2 ↔ py
+                v = -(y * (z2 - 0.5_wp*alpha) * sk_ba(4) &
+                      - SQRT3 * y * z2 * sk_ba(5))
+            case (4)  ! d3z2-r2 ↔ pz
+                v = -(z * (z2 - 0.5_wp*alpha) * sk_ba(4) &
+                      + SQRT3 * z * alpha * sk_ba(5))
+            case (5)  ! d3z2-r2 ↔ dxy
+                v = SQRT3 * x*y * (z2 - 0.5_wp*alpha) * sk_ab(1) &
+                    - 2.0_wp * SQRT3 * x*y * z2 * sk_ab(2) &
+                    + 0.5_wp * SQRT3 * x*y * (1.0_wp + z2) * sk_ab(3)
+            case (6)  ! d3z2-r2 ↔ dyz
+                v = SQRT3 * y*z * (z2 - 0.5_wp*alpha) * sk_ab(1) &
+                    + SQRT3 * y*z * (alpha - z2) * sk_ab(2) &
+                    - 0.5_wp * SQRT3 * y*z * alpha * sk_ab(3)
+            case (7)  ! d3z2-r2 ↔ dzx
+                v = SQRT3 * z*x * (z2 - 0.5_wp*alpha) * sk_ab(1) &
+                    + SQRT3 * z*x * (alpha - z2) * sk_ab(2) &
+                    - 0.5_wp * SQRT3 * z*x * alpha * sk_ab(3)
+            case (8)  ! d3z2-r2 ↔ dx2-y2
+                v = 0.5_wp * SQRT3 * beta * (z2 - 0.5_wp*alpha) * sk_ab(1) &
+                    - SQRT3 * z2 * beta * sk_ab(2) &
+                    + 0.25_wp * SQRT3 * (1.0_wp + z2) * beta * sk_ab(3)
+            case (9)  ! d3z2-r2 ↔ d3z2-r2
+                v = (z2 - 0.5_wp*alpha)**2 * sk_ab(1) &
+                    + 3.0_wp * z2 * alpha * sk_ab(2) &
+                    + 0.75_wp * alpha*alpha * sk_ab(3)
+            end select
+
+        end select
+    end function transform_sk
 
 
-    !> Remplit blk(1:na,1:nb). Les éléments sont issus de v_ab pour les
-    !> sous-blocs symétriques (ss, pp, dd) et combinés avec v_ba pour
-    !> les anti-diagonaux (sp, sd, pd) avec le signe (-1)^(l_A+l_B).
-    subroutine rotate_one(v_ab, v_ba, l_, m_, n_, na, nb, blk)
-        real(wp), intent(in)  :: v_ab(10), v_ba(10)
-        real(wp), intent(in)  :: l_, m_, n_
-        integer,  intent(in)  :: na, nb
-        real(wp), intent(out) :: blk(:,:)
+    !> Variante optimisée de `transform_sk` : précalcule les monômes
+    !> géométriques et factorise les coefficients (σ/π/δ) avant
+    !> multiplication par sk_ab / sk_ba. Le résultat numérique est
+    !> identique à `transform_sk` (à la précision flottante près).
+    pure function transform_sk_opt(x, y, z, mu, nu, sk_ab, sk_ba) result(v)
+        real(wp), intent(in) :: x, y, z
+        integer,  intent(in) :: mu, nu
+        real(wp), intent(in) :: sk_ab(10), sk_ba(10)
+        real(wp) :: v
+        real(wp) :: x2, y2, z2, xy, yz, zx
+        real(wp) :: alpha, beta, zh, x2y2, xyz
+        real(wp) :: cs, cp, cd
+        integer  :: key
 
-        ! ss
-        blk(1, 1) = v_ab(10)
+        x2 = x*x; y2 = y*y; z2 = z*z
+        xy = x*y; yz = y*z; zx = z*x
+        alpha = x2 + y2
+        beta  = x2 - y2
+        zh    = z2 - 0.5_wp * alpha
+        x2y2  = x2 * y2
+        xyz   = x * y * z
 
-        ! s (A) ↔ p, d (B)
-        if (nb >= 4) call sp_row(v_ab, l_, m_, n_, blk, 1)
-        if (nb >= 9) call sd_row(v_ab, l_, m_, n_, blk, 1)
+        v   = 0.0_wp
+        key = 9 * (mu - 1) + nu
 
-        ! p, d (A) ↔ s (B)  : signe (-1)^(l_A+l_B) sur v_ba
-        if (na >= 4) call ps_col(v_ba, l_, m_, n_, blk, 1)
-        if (na >= 9) call ds_col(v_ba, l_, m_, n_, blk, 1)
+        select case (key)
 
-        ! pp
-        if (na >= 4 .and. nb >= 4) call pp_block(v_ab, l_, m_, n_, blk)
+        ! ---- mu = 1 (s) ----
+        case (1)            ! s, s
+            v = sk_ab(10)
+        case (2)            ! s, px
+            v = x * sk_ab(9)
+        case (3)            ! s, py
+            v = y * sk_ab(9)
+        case (4)            ! s, pz
+            v = z * sk_ab(9)
+        case (5)            ! s, dxy
+            v = SQRT3 * xy * sk_ab(8)
+        case (6)            ! s, dyz
+            v = SQRT3 * yz * sk_ab(8)
+        case (7)            ! s, dzx
+            v = SQRT3 * zx * sk_ab(8)
+        case (8)            ! s, dx2-y2
+            v = 0.5_wp * SQRT3 * beta * sk_ab(8)
+        case (9)            ! s, d3z2-r2
+            v = zh * sk_ab(8)
 
-        ! p (A) ↔ d (B)
-        if (na >= 4 .and. nb >= 9) call pd_block(v_ab, l_, m_, n_, blk)
+        ! ---- mu = 2 (px) ----
+        case (10)           ! px, s
+            v = -x * sk_ba(9)
+        case (11)           ! px, px
+            v = x2 * sk_ab(6) + (1.0_wp - x2) * sk_ab(7)
+        case (12)           ! px, py
+            v = xy * (sk_ab(6) - sk_ab(7))
+        case (13)           ! px, pz
+            v = zx * (sk_ab(6) - sk_ab(7))
+        case (14)           ! px, dxy
+            cs = SQRT3 * x2 * y
+            cp = y * (1.0_wp - 2.0_wp*x2)
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (15)           ! px, dyz
+            cs = SQRT3 * xyz
+            cp = -2.0_wp * xyz
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (16)           ! px, dzx
+            cs = SQRT3 * x2 * z
+            cp = z * (1.0_wp - 2.0_wp*x2)
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (17)           ! px, dx2-y2
+            cs = 0.5_wp * SQRT3 * x * beta
+            cp = x * (1.0_wp - beta)
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (18)           ! px, d3z2-r2
+            cs = x * zh
+            cp = -SQRT3 * x * z2
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
 
-        ! d (A) ↔ p (B)  : signe (-1)^(l_A+l_B) = -1
-        if (na >= 9 .and. nb >= 4) call dp_block(v_ba, l_, m_, n_, blk)
+        ! ---- mu = 3 (py) ----
+        case (19)           ! py, s
+            v = -y * sk_ba(9)
+        case (20)           ! py, px
+            v = xy * (sk_ab(6) - sk_ab(7))
+        case (21)           ! py, py
+            v = y2 * sk_ab(6) + (1.0_wp - y2) * sk_ab(7)
+        case (22)           ! py, pz
+            v = yz * (sk_ab(6) - sk_ab(7))
+        case (23)           ! py, dxy
+            cs = SQRT3 * y2 * x
+            cp = x * (1.0_wp - 2.0_wp*y2)
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (24)           ! py, dyz
+            cs = SQRT3 * y2 * z
+            cp = z * (1.0_wp - 2.0_wp*y2)
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (25)           ! py, dzx
+            cs = SQRT3 * xyz
+            cp = -2.0_wp * xyz
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (26)           ! py, dx2-y2
+            cs = 0.5_wp * SQRT3 * y * beta
+            cp = -y * (1.0_wp + beta)
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (27)           ! py, d3z2-r2
+            cs = y * zh
+            cp = -SQRT3 * y * z2
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
 
-        ! dd
-        if (na >= 9 .and. nb >= 9) call dd_block(v_ab, l_, m_, n_, blk)
-    end subroutine rotate_one
+        ! ---- mu = 4 (pz) ----
+        case (28)           ! pz, s
+            v = -z * sk_ba(9)
+        case (29)           ! pz, px
+            v = zx * (sk_ab(6) - sk_ab(7))
+        case (30)           ! pz, py
+            v = yz * (sk_ab(6) - sk_ab(7))
+        case (31)           ! pz, pz
+            v = z2 * sk_ab(6) + (1.0_wp - z2) * sk_ab(7)
+        case (32)           ! pz, dxy
+            cs = SQRT3 * xyz
+            cp = -2.0_wp * xyz
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (33)           ! pz, dyz
+            cs = SQRT3 * z2 * y
+            cp = y * (1.0_wp - 2.0_wp*z2)
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (34)           ! pz, dzx
+            cs = SQRT3 * z2 * x
+            cp = x * (1.0_wp - 2.0_wp*z2)
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (35)           ! pz, dx2-y2
+            cs = 0.5_wp * SQRT3 * z * beta
+            cp = -z * beta
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
+        case (36)           ! pz, d3z2-r2
+            cs = z * zh
+            cp = SQRT3 * z * alpha
+            v  = cs * sk_ab(4) + cp * sk_ab(5)
 
+        ! ---- mu = 5 (dxy) ----
+        case (37)           ! dxy, s
+            v = SQRT3 * xy * sk_ba(8)
+        case (38)           ! dxy, px
+            cs = SQRT3 * x2 * y
+            cp = y * (1.0_wp - 2.0_wp*x2)
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (39)           ! dxy, py
+            cs = SQRT3 * y2 * x
+            cp = x * (1.0_wp - 2.0_wp*y2)
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (40)           ! dxy, pz
+            cs = SQRT3 * xyz
+            cp = -2.0_wp * xyz
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (41)           ! dxy, dxy
+            cs = 3.0_wp * x2y2
+            cp = alpha - 4.0_wp * x2y2
+            cd = z2 + x2y2
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (42)           ! dxy, dyz
+            cs = 3.0_wp * xy * yz
+            cp = zx * (1.0_wp - 4.0_wp*y2)
+            cd = zx * (y2 - 1.0_wp)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (43)           ! dxy, dzx
+            cs = 3.0_wp * x2 * yz
+            cp = yz * (1.0_wp - 4.0_wp*x2)
+            cd = yz * (x2 - 1.0_wp)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (44)           ! dxy, dx2-y2
+            cs = 1.5_wp * xy * beta
+            cp = -2.0_wp * xy * beta
+            cd = 0.5_wp * xy * beta
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (45)           ! dxy, d3z2-r2
+            cs = SQRT3 * xy * zh
+            cp = -2.0_wp * SQRT3 * xy * z2
+            cd = 0.5_wp * SQRT3 * xy * (1.0_wp + z2)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
 
-    !> s (ligne mu_s) ↔ p (colonnes 2..4) sur l'atome B.
-    pure subroutine sp_row(v, l_, m_, n_, blk, mu_s)
-        real(wp), intent(in)    :: v(10), l_, m_, n_
-        real(wp), intent(inout) :: blk(:,:)
-        integer,  intent(in)    :: mu_s
-        real(wp) :: vsps
-        vsps = v(9)
-        blk(mu_s, 2) = l_ * vsps
-        blk(mu_s, 3) = m_ * vsps
-        blk(mu_s, 4) = n_ * vsps
-    end subroutine sp_row
+        ! ---- mu = 6 (dyz) ----
+        case (46)           ! dyz, s
+            v = SQRT3 * yz * sk_ba(8)
+        case (47)           ! dyz, px
+            cs = SQRT3 * xyz
+            cp = -2.0_wp * xyz
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (48)           ! dyz, py
+            cs = SQRT3 * y2 * z
+            cp = z * (1.0_wp - 2.0_wp*y2)
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (49)           ! dyz, pz
+            cs = SQRT3 * z2 * y
+            cp = y * (1.0_wp - 2.0_wp*z2)
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (50)           ! dyz, dxy
+            cs = 3.0_wp * xy * yz
+            cp = zx * (1.0_wp - 4.0_wp*y2)
+            cd = zx * (y2 - 1.0_wp)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (51)           ! dyz, dyz
+            cs = 3.0_wp * y2 * z2
+            cp = y2 + z2 - 4.0_wp * y2 * z2
+            cd = x2 + y2 * z2
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (52)           ! dyz, dzx
+            cs = 3.0_wp * xy * z2
+            cp = xy * (1.0_wp - 4.0_wp*z2)
+            cd = xy * (z2 - 1.0_wp)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (53)           ! dyz, dx2-y2
+            cs = 1.5_wp * yz * beta
+            cp = -yz * (1.0_wp + 2.0_wp*beta)
+            cd = yz * (1.0_wp + 0.5_wp*beta)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (54)           ! dyz, d3z2-r2
+            cs = SQRT3 * yz * zh
+            cp = SQRT3 * yz * (alpha - z2)
+            cd = -0.5_wp * SQRT3 * yz * alpha
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
 
+        ! ---- mu = 7 (dzx) ----
+        case (55)           ! dzx, s
+            v = SQRT3 * zx * sk_ba(8)
+        case (56)           ! dzx, px
+            cs = SQRT3 * x2 * z
+            cp = z * (1.0_wp - 2.0_wp*x2)
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (57)           ! dzx, py
+            cs = SQRT3 * xyz
+            cp = -2.0_wp * xyz
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (58)           ! dzx, pz
+            cs = SQRT3 * z2 * x
+            cp = x * (1.0_wp - 2.0_wp*z2)
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (59)           ! dzx, dxy
+            cs = 3.0_wp * x2 * yz
+            cp = yz * (1.0_wp - 4.0_wp*x2)
+            cd = yz * (x2 - 1.0_wp)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (60)           ! dzx, dyz
+            cs = 3.0_wp * xy * z2
+            cp = xy * (1.0_wp - 4.0_wp*z2)
+            cd = xy * (z2 - 1.0_wp)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (61)           ! dzx, dzx
+            cs = 3.0_wp * z2 * x2
+            cp = z2 + x2 - 4.0_wp * z2 * x2
+            cd = y2 + z2 * x2
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (62)           ! dzx, dx2-y2
+            cs = 1.5_wp * zx * beta
+            cp = zx * (1.0_wp - 2.0_wp*beta)
+            cd = -zx * (1.0_wp - 0.5_wp*beta)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (63)           ! dzx, d3z2-r2
+            cs = SQRT3 * zx * zh
+            cp = SQRT3 * zx * (alpha - z2)
+            cd = -0.5_wp * SQRT3 * zx * alpha
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
 
-    !> s (ligne mu_s) ↔ d (colonnes 5..9) sur l'atome B.
-    pure subroutine sd_row(v, l_, m_, n_, blk, mu_s)
-        real(wp), intent(in)    :: v(10), l_, m_, n_
-        real(wp), intent(inout) :: blk(:,:)
-        integer,  intent(in)    :: mu_s
-        real(wp) :: vsds, alpha, beta, z2
-        vsds  = v(8)
-        alpha = l_*l_ + m_*m_
-        beta  = l_*l_ - m_*m_
-        z2    = n_*n_
-        blk(mu_s, 5) =  SQRT3 * l_ * m_                    * vsds
-        blk(mu_s, 6) =  SQRT3 * m_ * n_                    * vsds
-        blk(mu_s, 7) =  SQRT3 * n_ * l_                    * vsds
-        blk(mu_s, 8) =  0.5_wp * SQRT3 * beta              * vsds
-        blk(mu_s, 9) = (z2 - 0.5_wp * alpha)               * vsds
-    end subroutine sd_row
+        ! ---- mu = 8 (dx2-y2) ----
+        case (64)           ! dx2-y2, s
+            v = 0.5_wp * SQRT3 * beta * sk_ba(8)
+        case (65)           ! dx2-y2, px
+            cs = 0.5_wp * SQRT3 * x * beta
+            cp = x * (1.0_wp - beta)
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (66)           ! dx2-y2, py
+            cs = 0.5_wp * SQRT3 * y * beta
+            cp = -y * (1.0_wp + beta)
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (67)           ! dx2-y2, pz
+            cs = 0.5_wp * SQRT3 * z * beta
+            cp = -z * beta
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (68)           ! dx2-y2, dxy
+            cs = 1.5_wp * xy * beta
+            cp = -2.0_wp * xy * beta
+            cd = 0.5_wp * xy * beta
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (69)           ! dx2-y2, dyz
+            cs = 1.5_wp * yz * beta
+            cp = -yz * (1.0_wp + 2.0_wp*beta)
+            cd = yz * (1.0_wp + 0.5_wp*beta)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (70)           ! dx2-y2, dzx
+            cs = 1.5_wp * zx * beta
+            cp = zx * (1.0_wp - 2.0_wp*beta)
+            cd = -zx * (1.0_wp - 0.5_wp*beta)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (71)           ! dx2-y2, dx2-y2
+            cs = 0.75_wp * beta * beta
+            cp = alpha - beta * beta
+            cd = z2 + 0.25_wp * beta * beta
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (72)           ! dx2-y2, d3z2-r2
+            cs = 0.5_wp * SQRT3 * beta * zh
+            cp = -SQRT3 * z2 * beta
+            cd = 0.25_wp * SQRT3 * (1.0_wp + z2) * beta
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
 
+        ! ---- mu = 9 (d3z2-r2) ----
+        case (73)           ! d3z2-r2, s
+            v = zh * sk_ba(8)
+        case (74)           ! d3z2-r2, px
+            cs = x * zh
+            cp = -SQRT3 * x * z2
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (75)           ! d3z2-r2, py
+            cs = y * zh
+            cp = -SQRT3 * y * z2
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (76)           ! d3z2-r2, pz
+            cs = z * zh
+            cp = SQRT3 * z * alpha
+            v  = -(cs * sk_ba(4) + cp * sk_ba(5))
+        case (77)           ! d3z2-r2, dxy
+            cs = SQRT3 * xy * zh
+            cp = -2.0_wp * SQRT3 * xy * z2
+            cd = 0.5_wp * SQRT3 * xy * (1.0_wp + z2)
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (78)           ! d3z2-r2, dyz
+            cs = SQRT3 * yz * zh
+            cp = SQRT3 * yz * (alpha - z2)
+            cd = -0.5_wp * SQRT3 * yz * alpha
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (79)           ! d3z2-r2, dzx
+            cs = SQRT3 * zx * zh
+            cp = SQRT3 * zx * (alpha - z2)
+            cd = -0.5_wp * SQRT3 * zx * alpha
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (80)           ! d3z2-r2, dx2-y2
+            cs = 0.5_wp * SQRT3 * beta * zh
+            cp = -SQRT3 * z2 * beta
+            cd = 0.25_wp * SQRT3 * (1.0_wp + z2) * beta
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
+        case (81)           ! d3z2-r2, d3z2-r2
+            cs = zh * zh
+            cp = 3.0_wp * z2 * alpha
+            cd = 0.75_wp * alpha * alpha
+            v  = cs * sk_ab(1) + cp * sk_ab(2) + cd * sk_ab(3)
 
-    !> p (lignes 2..4) ↔ s (colonne nu_s). v est v_ba ; signe (-1).
-    pure subroutine ps_col(v_ba, l_, m_, n_, blk, nu_s)
-        real(wp), intent(in)    :: v_ba(10), l_, m_, n_
-        real(wp), intent(inout) :: blk(:,:)
-        integer,  intent(in)    :: nu_s
-        real(wp) :: vsps
-        vsps = v_ba(9)
-        blk(2, nu_s) = -l_ * vsps
-        blk(3, nu_s) = -m_ * vsps
-        blk(4, nu_s) = -n_ * vsps
-    end subroutine ps_col
+        end select
+    end function transform_sk_opt
 
-
-    !> d (lignes 5..9) ↔ s (colonne nu_s). v est v_ba ; signe (+1) car
-    !> (-1)^(l_A+l_B) = (-1)^(2+0) = +1.
-    pure subroutine ds_col(v_ba, l_, m_, n_, blk, nu_s)
-        real(wp), intent(in)    :: v_ba(10), l_, m_, n_
-        real(wp), intent(inout) :: blk(:,:)
-        integer,  intent(in)    :: nu_s
-        real(wp) :: vsds, alpha, beta, z2
-        vsds  = v_ba(8)
-        alpha = l_*l_ + m_*m_
-        beta  = l_*l_ - m_*m_
-        z2    = n_*n_
-        blk(5, nu_s) =  SQRT3 * l_ * m_       * vsds
-        blk(6, nu_s) =  SQRT3 * m_ * n_       * vsds
-        blk(7, nu_s) =  SQRT3 * n_ * l_       * vsds
-        blk(8, nu_s) =  0.5_wp * SQRT3 * beta * vsds
-        blk(9, nu_s) = (z2 - 0.5_wp * alpha)  * vsds
-    end subroutine ds_col
-
-
-    !> Bloc pp (px, py, pz) × (px, py, pz).
-    pure subroutine pp_block(v, l_, m_, n_, blk)
-        real(wp), intent(in)    :: v(10), l_, m_, n_
-        real(wp), intent(inout) :: blk(:,:)
-        real(wp) :: vpps, vppp
-        vpps = v(6); vppp = v(7)
-        blk(2,2) = l_*l_ * vpps + (1.0_wp - l_*l_) * vppp
-        blk(2,3) = l_*m_ * (vpps - vppp)
-        blk(2,4) = l_*n_ * (vpps - vppp)
-        blk(3,2) = blk(2,3)
-        blk(3,3) = m_*m_ * vpps + (1.0_wp - m_*m_) * vppp
-        blk(3,4) = m_*n_ * (vpps - vppp)
-        blk(4,2) = blk(2,4)
-        blk(4,3) = blk(3,4)
-        blk(4,4) = n_*n_ * vpps + (1.0_wp - n_*n_) * vppp
-    end subroutine pp_block
-
-
-    !> Bloc p (A) ↔ d (B). Lignes 2..4, colonnes 5..9. Utilise v_ab.
-    pure subroutine pd_block(v, l_, m_, n_, blk)
-        real(wp), intent(in)    :: v(10), l_, m_, n_
-        real(wp), intent(inout) :: blk(:,:)
-        real(wp) :: vpds, vpdp, alpha, beta, z2
-
-        vpds  = v(4); vpdp = v(5)
-        alpha = l_*l_ + m_*m_
-        beta  = l_*l_ - m_*m_
-        z2    = n_*n_
-
-        ! px ↔ d
-        blk(2,5) = SQRT3 * l_*l_ * m_              * vpds + m_ * (1.0_wp - 2.0_wp*l_*l_) * vpdp
-        blk(2,6) = SQRT3 * l_ * m_ * n_            * vpds - 2.0_wp * l_ * m_ * n_        * vpdp
-        blk(2,7) = SQRT3 * l_*l_ * n_              * vpds + n_ * (1.0_wp - 2.0_wp*l_*l_) * vpdp
-        blk(2,8) = 0.5_wp * SQRT3 * l_ * beta      * vpds + l_ * (1.0_wp - beta)         * vpdp
-        blk(2,9) = l_ * (z2 - 0.5_wp*alpha)        * vpds - SQRT3 * l_ * z2              * vpdp
-
-        ! py ↔ d
-        blk(3,5) = SQRT3 * m_*m_ * l_              * vpds + l_ * (1.0_wp - 2.0_wp*m_*m_) * vpdp
-        blk(3,6) = SQRT3 * m_*m_ * n_              * vpds + n_ * (1.0_wp - 2.0_wp*m_*m_) * vpdp
-        blk(3,7) = SQRT3 * l_ * m_ * n_            * vpds - 2.0_wp * l_ * m_ * n_        * vpdp
-        blk(3,8) = 0.5_wp * SQRT3 * m_ * beta      * vpds - m_ * (1.0_wp + beta)         * vpdp
-        blk(3,9) = m_ * (z2 - 0.5_wp*alpha)        * vpds - SQRT3 * m_ * z2              * vpdp
-
-        ! pz ↔ d
-        blk(4,5) = SQRT3 * l_ * m_ * n_            * vpds - 2.0_wp * l_ * m_ * n_        * vpdp
-        blk(4,6) = SQRT3 * n_*n_ * m_              * vpds + m_ * (1.0_wp - 2.0_wp*n_*n_) * vpdp
-        blk(4,7) = SQRT3 * n_*n_ * l_              * vpds + l_ * (1.0_wp - 2.0_wp*n_*n_) * vpdp
-        blk(4,8) = 0.5_wp * SQRT3 * n_ * beta      * vpds - n_ * beta                    * vpdp
-        blk(4,9) = n_ * (z2 - 0.5_wp*alpha)        * vpds + SQRT3 * n_ * alpha           * vpdp
-    end subroutine pd_block
-
-
-    !> Bloc d (A) ↔ p (B). v est v_ba ; signe (-1)^(l_A+l_B) = -1.
-    pure subroutine dp_block(v_ba, l_, m_, n_, blk)
-        real(wp), intent(in)    :: v_ba(10), l_, m_, n_
-        real(wp), intent(inout) :: blk(:,:)
-        real(wp) :: tblk(9, 9)
-        integer :: i, j
-
-        tblk = 0.0_wp
-        ! Calcule pd avec v_ba en réutilisant la formule, puis transpose
-        ! et applique le signe (-1)^(l_A+l_B) = -1.
-        call pd_block(v_ba, l_, m_, n_, tblk)
-        do i = 5, 9
-            do j = 2, 4
-                blk(i, j) = -tblk(j, i)
-            end do
-        end do
-    end subroutine dp_block
-
-
-    !> Bloc dd (5..9) × (5..9).
-    pure subroutine dd_block(v, l_, m_, n_, blk)
-        real(wp), intent(in)    :: v(10), l_, m_, n_
-        real(wp), intent(inout) :: blk(:,:)
-        real(wp) :: vdds, vddp, vddd
-        real(wp) :: alpha, beta, z2, l2, m2, n2, lm, mn, nl
-
-        vdds = v(1); vddp = v(2); vddd = v(3)
-        l2 = l_*l_; m2 = m_*m_; n2 = n_*n_
-        lm = l_*m_; mn = m_*n_; nl = n_*l_
-        alpha = l2 + m2
-        beta  = l2 - m2
-        z2    = n2
-
-        ! dxy / dxy
-        blk(5,5) = 3.0_wp*l2*m2 * vdds + (alpha - 4.0_wp*l2*m2) * vddp &
-                 + (z2 + l2*m2)        * vddd
-        ! dxy / dyz
-        blk(5,6) = 3.0_wp*l_*m2*n_ * vdds + l_*n_*(1.0_wp - 4.0_wp*m2) * vddp &
-                 + l_*n_*(m2 - 1.0_wp)    * vddd
-        ! dxy / dzx
-        blk(5,7) = 3.0_wp*l2*m_*n_ * vdds + m_*n_*(1.0_wp - 4.0_wp*l2) * vddp &
-                 + m_*n_*(l2 - 1.0_wp)    * vddd
-        ! dxy / dx2-y2
-        blk(5,8) = 1.5_wp*lm*beta  * vdds - 2.0_wp*lm*beta * vddp &
-                 + 0.5_wp*lm*beta  * vddd
-        ! dxy / d3z2-r2
-        blk(5,9) = SQRT3*lm*(z2 - 0.5_wp*alpha) * vdds - 2.0_wp*SQRT3*lm*z2 * vddp &
-                 + 0.5_wp*SQRT3*lm*(1.0_wp + z2) * vddd
-
-        ! dyz / dyz
-        blk(6,6) = 3.0_wp*m2*n2 * vdds + (m2 + n2 - 4.0_wp*m2*n2) * vddp &
-                 + (l2 + m2*n2) * vddd
-        ! dyz / dzx
-        blk(6,7) = 3.0_wp*l_*m_*n2 * vdds + l_*m_*(1.0_wp - 4.0_wp*n2) * vddp &
-                 + l_*m_*(n2 - 1.0_wp)    * vddd
-        ! dyz / dx2-y2
-        blk(6,8) = 1.5_wp*mn*beta * vdds - mn*(1.0_wp + 2.0_wp*beta) * vddp &
-                 + mn*(1.0_wp + 0.5_wp*beta) * vddd
-        ! dyz / d3z2-r2
-        blk(6,9) = SQRT3*mn*(z2 - 0.5_wp*alpha) * vdds + SQRT3*mn*(alpha - z2) * vddp &
-                 - 0.5_wp*SQRT3*mn*alpha        * vddd
-
-        ! dzx / dzx
-        blk(7,7) = 3.0_wp*n2*l2 * vdds + (n2 + l2 - 4.0_wp*n2*l2) * vddp &
-                 + (m2 + n2*l2) * vddd
-        ! dzx / dx2-y2
-        blk(7,8) = 1.5_wp*nl*beta * vdds + nl*(1.0_wp - 2.0_wp*beta) * vddp &
-                 - nl*(1.0_wp - 0.5_wp*beta) * vddd
-        ! dzx / d3z2-r2
-        blk(7,9) = SQRT3*nl*(z2 - 0.5_wp*alpha) * vdds + SQRT3*nl*(alpha - z2) * vddp &
-                 - 0.5_wp*SQRT3*nl*alpha        * vddd
-
-        ! dx2-y2 / dx2-y2
-        blk(8,8) = 0.75_wp*beta*beta * vdds + (alpha - beta*beta) * vddp &
-                 + (z2 + 0.25_wp*beta*beta) * vddd
-        ! dx2-y2 / d3z2-r2
-        blk(8,9) = 0.5_wp*SQRT3*beta*(z2 - 0.5_wp*alpha) * vdds &
-                 - SQRT3*z2*beta * vddp &
-                 + 0.25_wp*SQRT3*(1.0_wp + z2)*beta * vddd
-
-        ! d3z2-r2 / d3z2-r2
-        blk(9,9) = (z2 - 0.5_wp*alpha)**2 * vdds + 3.0_wp*z2*alpha * vddp &
-                 + 0.75_wp*alpha*alpha    * vddd
-
-        ! Symétrise le sous-bloc dd
-        blk(6,5) = blk(5,6)
-        blk(7,5) = blk(5,7); blk(7,6) = blk(6,7)
-        blk(8,5) = blk(5,8); blk(8,6) = blk(6,8); blk(8,7) = blk(7,8)
-        blk(9,5) = blk(5,9); blk(9,6) = blk(6,9); blk(9,7) = blk(7,9)
-        blk(9,8) = blk(8,9)
-    end subroutine dd_block
 end module skrot

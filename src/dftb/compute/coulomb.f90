@@ -6,7 +6,7 @@ module coulomb
     implicit none
     private
 
-    public :: coulomb_energy, coulomb_potential
+    public :: coulomb_energy
 
 contains
 
@@ -23,17 +23,4 @@ contains
         end do
         e = 0.5_wp * e
     end function coulomb_energy
-
-    subroutine coulomb_potential(gamma, dq, V)
-        real(wp), intent(in)  :: gamma(:,:), dq(:)
-        real(wp), intent(out) :: V(:)
-        integer :: i, j, n
-        n = size(dq)
-        do i = 1, n
-            V(i) = 0.0_wp
-            do j = 1, n
-                V(i) = V(i) + gamma(i, j) * dq(j)
-            end do
-        end do
-    end subroutine coulomb_potential
 end module coulomb

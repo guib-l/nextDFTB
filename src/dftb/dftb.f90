@@ -28,9 +28,9 @@ module dftb
     use scc,           only: solve_scc
     use repulsif,      only: repulsive_energy
     use coulomb,       only: coulomb_energy
-    use dftb_energy,   only: total_energy
+    use dftb_energy,   only: total_energy, electronic_energy, scc_energy
     use dftb_grad,     only: zero_gradient
-    use write_dftb,    only: write_dftb_final
+    use write_dftb,    only: write_dftb_final, write_dftb_population
     use errors,        only: fatal
     implicit none
     private
@@ -115,12 +115,17 @@ contains
         self%state%e_rep = repulsive_energy(self%struct)
         select case (self%prop%scheme)
         case (SCHEME_BASIC)
-            self%state%e_coul = 0.0_wp
+            self%state%e_scc = 0.0_wp
         case (SCHEME_NOSCC, SCHEME_SCC)
-            self%state%e_coul = coulomb_energy(self%state%gamma, self%state%dq)
+            self%state%e_scc = scc_energy(self%state%gamma, self%state%dq)
         end select
-        self%state%e_total = total_energy(self%state%e_band, &
-                                          self%state%e_coul, self%state%e_rep)
+        self%state%e_coul = self%state%e_scc
+        self%state%e_elec = electronic_energy(self%state%occ, &
+                                              self%state%C, &
+                                              self%state%H0)
+        self%state%e_total = total_energy(self%state%e_elec, &
+                                          self%state%e_coul, &
+                                          self%state%e_rep)
 
         call zero_gradient(self%state%grad)
     end subroutine dftb_execute
@@ -143,10 +148,10 @@ contains
 
     subroutine dftb_write_output(self)
         class(dftb_calc_t), intent(inout) :: self
-        real(wp), allocatable :: q(:)
-        q = self%get_charges()
-        call write_dftb_final(self%state%e_total, self%state%e_band, &
-                              self%state%e_coul,  self%state%e_rep, q)
+        call write_dftb_final(self%state%e_total, self%state%e_band,  &
+                              self%state%e_elec,  self%state%e_scc,    &
+                              self%state%e_rep)
+        call write_dftb_population(self%state)
     end subroutine dftb_write_output
 
 

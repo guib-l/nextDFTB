@@ -41,6 +41,7 @@ add_executable(nextdftb
     dftb/core/density.f90
     dftb/compute/coulomb.f90
     dftb/compute/charges.f90
+    dftb/core/shift.f90
     dftb/compute/dftb_energy.f90
     dftb/compute/dftb_grad.f90
     dftb/solver/linalg.f90

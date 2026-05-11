@@ -57,7 +57,10 @@ def calc_gamma(R: Tensor, Z, hubbard: dict[int, float]) -> Tensor:
     for i in range(n):
         for j in range(i, n):
             rij = float(np.linalg.norm(R_np[i] - R_np[j]))
-            v = Gamma(rij, u_list[i], u_list[j])
+            if rij > 1e-7:
+                v = 1/rij - Gamma(rij, u_list[i], u_list[j])
+            else:
+                v = Gamma(rij, u_list[i], u_list[j])
             G[i, j] = v
             G[j, i] = v
     return torch.from_numpy(G).to(dtype=R_t.dtype, device=R_t.device)

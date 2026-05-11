@@ -21,6 +21,7 @@ module atoms_mod
         real(wp)                               :: charge      = 0.0_wp
         real(wp)                               :: mass        = 0.0_wp
         integer                                :: molecule_id = 1
+        integer                                :: size_orb    = 0
         character(len=ORB_LEN), allocatable    :: orbitals(:)
         real(wp),               allocatable    :: occupation(:)
     end type atoms_t

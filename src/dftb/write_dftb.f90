@@ -4,11 +4,13 @@
 !>   - en-tête de la boucle SCF
 !>   - une ligne par itération SCF (it, max|Δq|)
 !>   - statut de convergence
-!>   - résultat final (énergies, charges Mulliken)
+!>   - résultat final (énergies)
+!>   - charges et populations (write_dftb_population)
 module write_dftb
     use kinds,        only: wp
+    use dftbstate,    only: dftbstate_t
     use write_output, only: section, subsection, line, &
-                            kv_int, kv_log, kv_real, kv_real_es, &
+                            kv_int, kv_log, kv_real_es, &
                             output_unit_id, output_is_open
     use write_matrix, only: print_matrix
     use output_base,  only: output_base_t
@@ -17,13 +19,15 @@ module write_dftb
 
     public :: write_dftb_scc_header, write_dftb_scc_iter
     public :: write_dftb_scc_status, write_dftb_final
-    public :: write_dftb_matrices
+    public :: write_dftb_matrices, write_dftb_population
 
     !> Objet de sortie DFTB. Stocke les résultats essentiels et délègue
     !> à `write_dftb_final` pour l'écriture finale.
     type, extends(output_base_t), public :: output_dftb_t
         real(wp)              :: e_total = 0.0_wp
         real(wp)              :: e_band  = 0.0_wp
+        real(wp)              :: e_elec  = 0.0_wp
+        real(wp)              :: e_scc   = 0.0_wp
         real(wp)              :: e_coul  = 0.0_wp
         real(wp)              :: e_rep   = 0.0_wp
         real(wp), allocatable :: charges(:)
@@ -74,30 +78,97 @@ contains
         end if
     end subroutine write_dftb_scc_status
 
-    subroutine write_dftb_final(e_total, e_band, e_coulomb, e_rep, charges_)
-        real(wp), intent(in) :: e_total, e_band, e_coulomb, e_rep
-        real(wp), intent(in) :: charges_(:)
-        character(len=128) :: buf
-        integer :: i
+    subroutine write_dftb_final(e_total, e_band, e_elec, e_scc, e_rep)
+        real(wp), intent(in) :: e_total, e_band, e_elec, e_scc, e_rep
 
         call section("DFTB final result")
 
         call subsection("Energies (Hartree)")
-        call kv_real_es("E_band",      e_band)
-        call kv_real_es("E_coulomb",   e_coulomb)
-        call kv_real_es("E_repulsive", e_rep)
-        call kv_real_es("E_total",     e_total)
-
-        call subsection("Mulliken charges")
-        do i = 1, size(charges_)
-            write(buf, '(a,i5,a,f12.6)') "  atom ", i, "  q = ", charges_(i)
-            call line(buf)
-        end do
+        call kv_real_es("E_band",        e_band)
+        call kv_real_es("E_H0",  e_elec)
+        call kv_real_es("E_electronic",  e_elec-e_scc)
+        call kv_real_es("E_scc",         e_scc)
+        call kv_real_es("E_repulsive",   e_rep)
+        call kv_real_es("E_total",       e_total)
     end subroutine write_dftb_final
 
 
-    subroutine write_dftb_matrices(H, S, P, C)
-        real(wp), intent(in) :: H(:,:), S(:,:), P(:,:), C(:,:)
+    !> Affiche les charges atomiques (dq) puis les populations par
+    !> orbitale (m-shell) avec, en regard, la population de la l-shell
+    !> et la population atomique brute (q).
+    subroutine write_dftb_population(state)
+        type(dftbstate_t), intent(in) :: state
+
+        integer :: ia, ils, ks, mu_lo, mu_hi, mu, l_val, m_val
+        integer :: o0, ls0, natoms
+        real(wp) :: total_charge, lshell_val, atomic_val
+        character(len=120) :: buf
+
+        if (.not. output_is_open()) return
+
+        natoms = size(state%bas%atom_norb)
+        total_charge = 0.0_wp
+        do ia = 1, natoms
+            total_charge = total_charge + state%dq(ia)
+        end do
+
+        call line("")
+        write(buf, '(a,f12.8)') " Total charge: ", total_charge
+        call line(trim(buf))
+
+        call line("")
+        call line("> Atomic charges ")
+        call line("")
+        call line(" Atom   Population")
+        call line(" ------------------")
+        do ia = 1, natoms
+            write(buf, '(i5,3x,f12.8)') ia, state%dq(ia)
+            call line(trim(buf))
+        end do
+
+        call line("")
+        call line("> Orbital populations ")
+        call line("")
+        call line(" Atom Sh.   l   m   Population  l-shell     Atomic")
+        call line(" -----------------------------------------------------")
+
+        do ia = 1, natoms
+            o0  = state%bas%atom_orb_start(ia)
+            ls0 = state%bas%atom_lshell_start(ia)
+            atomic_val = state%q(ia)
+            do ils = 1, state%bas%atom_nlshell(ia)
+                call lshell_orb_range_loc(ils, mu_lo, mu_hi)
+                lshell_val = state%lshell_q(ls0 + ils - 1)
+                l_val = ils - 1
+                ! Ordre m affiché : s (l=0) → 0 ; p (l=1) → 1,-1,0
+                ! (px,py,pz) ; d (l=2) → -2,-1,0,1,2 (xy,yz,z²,xz,x²-y²).
+                do ks = 1, mu_hi - mu_lo + 1
+                    mu = o0 + (mu_lo - 1) + ks - 1
+                    m_val = m_of_local_orbital(ils, ks)
+                    if (ks == 1) then
+                        if (ils == 1) then
+                            write(buf, '(i5,i4,i4,i4,3x,f10.8,2x,f10.8,2x,f10.8)') &
+                                ia, ils, l_val, m_val, state%mshell_q(mu), &
+                                lshell_val, atomic_val
+                        else
+                            write(buf, '(i5,i4,i4,i4,3x,f10.8,2x,f10.8,2x,a)') &
+                                ia, ils, l_val, m_val, state%mshell_q(mu), &
+                                lshell_val, "---       "
+                        end if
+                    else
+                        write(buf, '(i5,i4,i4,i4,3x,f10.8,2x,a,2x,a)') &
+                            ia, ils, l_val, m_val, state%mshell_q(mu), &
+                            "---       ", "---       "
+                    end if
+                    call line(trim(buf))
+                end do
+            end do
+        end do
+    end subroutine write_dftb_population
+
+
+    subroutine write_dftb_matrices(H, S, P, C, G)
+        real(wp), intent(in) :: H(:,:), S(:,:), P(:,:), C(:,:), G(:,:)
         integer :: u, ios
 
         open(newunit=u, file="hamiltonian.dat", status='replace', &
@@ -111,6 +182,13 @@ contains
              action='write', iostat=ios)
         if (ios == 0) then
             call print_matrix(u, "S", S)
+            close(u)
+        end if
+
+        open(newunit=u, file="gamma.dat", status='replace', &
+             action='write', iostat=ios)
+        if (ios == 0) then
+            call print_matrix(u, "Gamma", G)
             close(u)
         end if
 
@@ -139,13 +217,53 @@ contains
 
     subroutine dftb_write_result(self)
         class(output_dftb_t), intent(inout) :: self
-        real(wp), allocatable :: q(:)
-        if (allocated(self%charges)) then
-            q = self%charges
-        else
-            allocate(q(0))
-        end if
-        call write_dftb_final(self%e_total, self%e_band, self%e_coul, &
-                              self%e_rep, q)
+        call write_dftb_final(self%e_total, self%e_band, self%e_elec, &
+                              self%e_scc, self%e_rep)
     end subroutine dftb_write_result
+
+
+    !-- helpers privés -------------------------------------------------
+
+    !> Plage locale d'orbitales de la sous-couche `ils` au sein d'un
+    !> atome (1-based dans le bloc atomique). 1=s, 2..4=p, 5..9=d.
+    pure subroutine lshell_orb_range_loc(ils, mu_lo, mu_hi)
+        integer, intent(in)  :: ils
+        integer, intent(out) :: mu_lo, mu_hi
+        select case (ils)
+        case (1); mu_lo = 1; mu_hi = 1
+        case (2); mu_lo = 2; mu_hi = 4
+        case (3); mu_lo = 5; mu_hi = 9
+        case default; mu_lo = 1; mu_hi = 0
+        end select
+    end subroutine lshell_orb_range_loc
+
+
+    !> Convention harmoniques sphériques réelles → m :
+    !>   s : m=0
+    !>   p : px ↔ +1, py ↔ -1, pz ↔ 0   (ordre matel : 1=px,2=py,3=pz)
+    !>   d : dxy↔-2, dyz↔-1, dzx↔+1, dx²-y²↔+2, d3z²-r²↔0
+    !>      (ordre matel : 1=xy,2=yz,3=zx,4=x²-y²,5=3z²-r²)
+    pure function m_of_local_orbital(ils, k) result(m)
+        integer, intent(in) :: ils, k
+        integer :: m
+        m = 0
+        select case (ils)
+        case (1)
+            m = 0
+        case (2)
+            select case (k)
+            case (1); m =  1
+            case (2); m = -1
+            case (3); m =  0
+            end select
+        case (3)
+            select case (k)
+            case (1); m = -2
+            case (2); m = -1
+            case (3); m =  1
+            case (4); m =  2
+            case (5); m =  0
+            end select
+        end select
+    end function m_of_local_orbital
 end module write_dftb

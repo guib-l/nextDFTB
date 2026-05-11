@@ -26,16 +26,20 @@ module dftbstate
     type, public :: basis_system_t
         integer :: nelem = 0
         type(element_info_t), allocatable :: elems(:)
-        integer, allocatable :: atom_elem(:)        ! (natoms) idx in elems
-        integer, allocatable :: atom_orb_start(:)   ! (natoms) 1-based
-        integer, allocatable :: atom_norb(:)        ! (natoms)
-        integer :: norb_total = 0
-        integer :: nelec      = 0
+        integer, allocatable :: atom_elem(:)         ! (natoms) idx in elems
+        integer, allocatable :: atom_orb_start(:)    ! (natoms) 1-based
+        integer, allocatable :: atom_norb(:)         ! (natoms)
+        integer, allocatable :: atom_lshell_start(:) ! (natoms) 1-based
+        integer, allocatable :: atom_nlshell(:)      ! (natoms) l_max+1
+        integer :: norb_total  = 0
+        integer :: lshell_orbs = 0
+        integer :: nelec       = 0
     end type basis_system_t
 
     type, public :: dftbstate_t
         type(basis_system_t)  :: bas
         real(wp), allocatable :: H(:,:)
+        real(wp), allocatable :: H0(:,:)
         real(wp), allocatable :: S(:,:)
         real(wp), allocatable :: C(:,:)
         real(wp), allocatable :: eig(:)
@@ -43,10 +47,14 @@ module dftbstate
         real(wp), allocatable :: occ(:)
         real(wp), allocatable :: q(:)
         real(wp), allocatable :: dq(:)
+        real(wp), allocatable :: lshell_q(:)
+        real(wp), allocatable :: mshell_q(:)
         real(wp), allocatable :: gamma(:,:)
         real(wp), allocatable :: grad(:,:)
         real(wp) :: e_total = 0.0_wp
         real(wp) :: e_band  = 0.0_wp
+        real(wp) :: e_elec  = 0.0_wp
+        real(wp) :: e_scc   = 0.0_wp
         real(wp) :: e_coul  = 0.0_wp
         real(wp) :: e_rep   = 0.0_wp
         integer  :: niter     = 0

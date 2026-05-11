@@ -79,6 +79,7 @@ contains
 
         allocate(skf%h(SKF_NHS, skf%ngrid))
         allocate(skf%s(SKF_NHS, skf%ngrid))
+
         do i = 1, skf%ngrid
             read(u, *, iostat=ios) row20
             if (ios /= 0) call fatal("readskf", "bad HS row")

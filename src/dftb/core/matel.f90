@@ -4,9 +4,9 @@
 !> - blocs off-diagonaux  : intégrales SK (via API publique skf)
 !>                          + rotation cartésienne (skrot)
 !>
-!> Ordre des orbitales par atome : 1=s, 2=px, 3=py, 4=pz.
-!> La version actuelle prend en charge les bases s et s+p (les d-orbitales
-!> ne sont pas encore couvertes par la rotation).
+!> Ordre des orbitales par atome :
+!>   1=s, 2=px, 3=py, 4=pz,
+!>   5=dxy, 6=dyz, 7=dzx, 8=dx2−y2, 9=d3z2−r2
 module matel
     use kinds,         only: wp
     use constants,     only: SYMBOL_LEN
@@ -21,7 +21,7 @@ module matel
                               skf_nelements       => nelements,       &
                               skf_element_symbol  => element_symbol
     use errors,        only: fatal
-    use skrot,         only: sk_block
+    use skrot,         only: transform_sk
     implicit none
     private
 
@@ -34,12 +34,14 @@ contains
     !> Le nombre d'orbitales est déterminé par le mot-clé ORBITALS de
     !> l'input (s'il est fourni), sinon par le pattern non-nul des
     !> occupations lues dans les fichiers SKF.
+    !> Propage également `size_orb` vers chaque atome de `struct`.
     subroutine build_basis_system(struct, basis_in, bas)
-        type(structure_t),    intent(in)  :: struct
+        type(structure_t),    intent(inout) :: struct
         type(property_basis_t),        intent(in)  :: basis_in
         type(basis_system_t), intent(out) :: bas
-        integer :: i, k, n_elem, ia, n_s, n_p, n_d, n_f
+        integer :: i, k, n_elem, ia, n_s, n_p, n_d, n_f, nls
         real(wp) :: eps(3), hub(3), occ(3)
+        real(wp) :: nelec_real
         character(len=SYMBOL_LEN) :: sym
         character(len=64) :: orb_str
         logical :: has_spec
@@ -104,22 +106,34 @@ contains
         allocate(bas%atom_elem(struct%natoms))
         allocate(bas%atom_norb(struct%natoms))
         allocate(bas%atom_orb_start(struct%natoms))
+        allocate(bas%atom_nlshell(struct%natoms))
+        allocate(bas%atom_lshell_start(struct%natoms))
 
-        bas%norb_total = 0
+        bas%norb_total  = 0
+        bas%lshell_orbs = 0
         do ia = 1, struct%natoms
             k = match_symbol(bas, struct%atoms(ia)%symbol)
             if (k == 0) call fatal("matel", "unknown element: "//trim(struct%atoms(ia)%symbol))
-            bas%atom_elem(ia)      = k
-            bas%atom_norb(ia)      = bas%elems(k)%n_orb
-            bas%atom_orb_start(ia) = bas%norb_total + 1
-            bas%norb_total         = bas%norb_total + bas%elems(k)%n_orb
+            nls = bas%elems(k)%l_max + 1
+            bas%atom_elem(ia)         = k
+            bas%atom_norb(ia)         = bas%elems(k)%n_orb
+            bas%atom_orb_start(ia)    = bas%norb_total + 1
+            bas%norb_total            = bas%norb_total + bas%elems(k)%n_orb
+            bas%atom_nlshell(ia)      = nls
+            bas%atom_lshell_start(ia) = bas%lshell_orbs + 1
+            bas%lshell_orbs           = bas%lshell_orbs + nls
+            struct%atoms(ia)%size_orb = bas%elems(k)%n_orb
         end do
 
-        bas%nelec = 0
+        ! Somme en flottant puis arrondi unique : évite que `nint`
+        ! par atome ne crée un déséquilibre quand les charges
+        ! formelles fractionnaires des atomes se compensent globalement.
+        nelec_real = 0.0_wp
         do ia = 1, struct%natoms
             k = bas%atom_elem(ia)
-            bas%nelec = bas%nelec + nint(bas%elems(k)%q_neutral - struct%atoms(ia)%charge)
+            nelec_real = nelec_real + bas%elems(k)%q_neutral - struct%atoms(ia)%charge
         end do
+        bas%nelec = nint(nelec_real)
     end subroutine build_basis_system
 
 
@@ -226,7 +240,7 @@ contains
         real(wp), allocatable :: hblk(:,:), sblk(:,:)
 
         do i = 1, struct%natoms
-            do j = i + 1, struct%natoms
+            do j = 1 + i, struct%natoms
                 ni = bas%atom_norb(i); nj = bas%atom_norb(j)
                 oi = bas%atom_orb_start(i); oj = bas%atom_orb_start(j)
                 allocate(hblk(ni, nj), sblk(ni, nj))
@@ -275,14 +289,15 @@ contains
 
 
     !> Calcule le bloc hors-diagonal (ni × nj) entre les atomes i et j
-    !> via skf + skrot.
+    !> via skf + skrot. Boucle élément par élément en appelant
+    !> `transform_sk` pour chaque (mu, nu).
     subroutine build_off_block(struct, bas, i, j, hblk, sblk)
         type(structure_t),    intent(in)  :: struct
         type(basis_system_t), intent(in)  :: bas
         integer,              intent(in)  :: i, j
         real(wp),             intent(out) :: hblk(:,:), sblk(:,:)
-        integer :: ni, nj
-        real(wp) :: r, dir(3)
+        integer :: ni, nj, mu, nu
+        real(wp) :: r, dir(3), x, y, z
         real(wp), allocatable :: h_ab(:), s_ab(:), h_ba(:), s_ba(:)
         character(len=SYMBOL_LEN) :: sym_i, sym_j
 
@@ -295,13 +310,19 @@ contains
         r = struct%dist(i, j)
         if (r < 1.0e-8_wp) return
         dir = (struct%atoms(j)%position - struct%atoms(i)%position) / r
+        x = dir(1); y = dir(2); z = dir(3)
 
         h_ab = skf_get_hamiltonian(trim(sym_i), trim(sym_j), r)
         s_ab = skf_get_overlaps   (trim(sym_i), trim(sym_j), r)
         h_ba = skf_get_hamiltonian(trim(sym_j), trim(sym_i), r)
         s_ba = skf_get_overlaps   (trim(sym_j), trim(sym_i), r)
 
-        call sk_block(h_ab, s_ab, h_ba, s_ba, dir, ni, nj, hblk, sblk)
+        do mu = 1, ni
+            do nu = 1, nj
+                hblk(mu, nu) = transform_sk(x, y, z, mu, nu, h_ab, h_ba)
+                sblk(mu, nu) = transform_sk(x, y, z, mu, nu, s_ab, s_ba)
+            end do
+        end do
 
         deallocate(h_ab, s_ab, h_ba, s_ba)
     end subroutine build_off_block

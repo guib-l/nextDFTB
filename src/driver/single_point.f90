@@ -39,9 +39,9 @@ contains
 
         call subsection("Geometry")
         call kv_int("natoms", struct%natoms)
-        call line("    idx  symbol         x (Å)         y (Å)         z (Å)     q0")
+        call line("    idx  symbol         x (Å)         y (Å)         z (Å)         q0")
         do i = 1, struct%natoms
-            write(buf, '(a,i5,3x,a4,3(1x,f14.6),1x,f8.3)') "  ", i, &
+            write(buf, '(a,i5,3x,a4,3(1x,f14.6),1x,f12.8)') "  ", i, &
                 struct%atoms(i)%symbol, &
                 bohr_to_ang(struct%atoms(i)%position(1)), &
                 bohr_to_ang(struct%atoms(i)%position(2)), &

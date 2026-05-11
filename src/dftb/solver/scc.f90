@@ -6,8 +6,8 @@
 !>             fournies dans l'input de géométrie (pas d'auto-cohérence).
 !>   - SCC   : cycle SCC complet jusqu'à convergence sur Δq.
 !>
-!> Les helpers `build_shift` et `build_ham` factorisent la construction
-!> de l'hamiltonien shifté H_μν = H0_μν + (1/2) S_μν (V_A + V_B).
+!> Le shift H1_{μν} = (1/2) S_{μν} (V_A + V_B) est délégué au module
+!> `shift`. Le helper `build_ham` ajoute simplement H = H0 + H1.
 module scc
     use kinds,         only: wp
     use structure_mod, only: structure_t
@@ -16,8 +16,10 @@ module scc
     use gamma_mod,     only: build_gamma
     use density,       only: build_density
     use linalg,        only: solve_gen_eig
-    use charges,       only: mulliken_charges, delta_charges
-    use coulomb,       only: coulomb_potential, coulomb_energy
+    use charges,       only: atomic_population, partial_atomic_dq, &
+                              lshell_population, mshell_population
+    use coulomb,       only: coulomb_energy
+    use shift,         only: build_shift, SHIFT_DQ
     use mixer,         only: mixer_t
     use mixer_factory, only: make_mixer
     use property,      only: property_mixer_t,                          &
@@ -68,14 +70,17 @@ contains
         type(dftbstate_t), intent(inout) :: st
 
         call build_hs(struct, st%bas, st%H, st%S)
+        st%H0 = st%H
         call set_occ(st%bas%nelec, st%bas%norb_total, st%occ)
 
         call solve_gen_eig(st%H, st%S, st%eig, st%C)
         call build_density(st%C, st%occ, st%P)
-        call mulliken_charges(st%P, st%S, st%bas, st%q)
-        call delta_charges(st%q, st%bas, st%dq)
+        call atomic_population(st%P, st%S, st%bas, st%q)
+        call partial_atomic_dq(st%q, st%bas, st%dq)
+        call lshell_population(st%P, st%S, st%bas, st%lshell_q)
+        call mshell_population(st%P, st%S, st%bas, st%mshell_q)
 
-        if (write_matrix) call write_dftb_matrices(st%H, st%S, st%P, st%C)
+        if (write_matrix) call write_dftb_matrices(st%H, st%S, st%P, st%C, st%gamma)
 
         st%e_band    = sum(st%occ * st%eig)
         st%niter     = 1
@@ -92,38 +97,39 @@ contains
         type(dftbstate_t), intent(inout) :: st
 
         integer  :: ia, natoms
-        real(wp), allocatable :: H0(:,:), S_shift(:,:), V_atom(:)
+        real(wp), allocatable :: S_shift(:,:)
 
         natoms = struct%natoms
-        allocate(H0(st%bas%norb_total, st%bas%norb_total))
         allocate(S_shift(st%bas%norb_total, st%bas%norb_total))
-        allocate(V_atom(natoms))
 
-        call build_hs(struct, st%bas, H0, st%S)
+        call build_hs(struct, st%bas, st%H0, st%S)
         call build_gamma(struct, st%bas, st%gamma, gamma_kind)
 
-        ! Δq initial = - charge formelle fournie par l'input géométrie.
-        ! Convention : charge>0 (cation) ⇒ moins d'électrons ⇒ Δq<0.
+        ! Δq initial = charge formelle fournie par l'input géométrie.
+        ! Convention : charge>0 (cation) ⇒ moins d'électrons ⇒ Δq>0.
         do ia = 1, natoms
-            st%dq(ia) = -struct%atoms(ia)%charge
+            st%dq(ia) = struct%atoms(ia)%charge
         end do
 
-        call coulomb_potential(st%gamma, st%dq, V_atom)
-        call build_shift(st%S, V_atom, st%bas, S_shift)
-        call build_ham(H0, S_shift, st%H)
+        ! Variante atomique imposée : aucun lshell_q n'est calculé
+        ! avant la première (et unique) diagonalisation.
+        call build_shift(st%S, st%gamma, st%dq, st%bas, S_shift, kind=SHIFT_DQ)
+        call build_ham(st%H0, S_shift, st%H)
 
         call set_occ(st%bas%nelec, st%bas%norb_total, st%occ)
         call solve_gen_eig(st%H, st%S, st%eig, st%C)
         call build_density(st%C, st%occ, st%P)
-        call mulliken_charges(st%P, st%S, st%bas, st%q)
+        call atomic_population(st%P, st%S, st%bas, st%q)
+        call lshell_population(st%P, st%S, st%bas, st%lshell_q)
+        call mshell_population(st%P, st%S, st%bas, st%mshell_q)
 
-        if (write_matrix) call write_dftb_matrices(H0, st%S, st%P, st%C)
+        if (write_matrix) call write_dftb_matrices(st%H0, st%S, st%P, st%C, st%gamma)
 
         st%e_band    = sum(st%occ * st%eig)
         st%niter     = 1
         st%converged = .true.
 
-        deallocate(H0, S_shift, V_atom)
+        deallocate(S_shift)
     end subroutine solve_noscc
 
 
@@ -139,22 +145,25 @@ contains
         type(property_mixer_t), intent(in)    :: mixing
         type(dftbstate_t),      intent(inout) :: st
 
-        integer  :: it, natoms
+        integer  :: it, ia, natoms
         real(wp) :: max_diff, e_scc, e_scc_prev, dE_elec, e_coul_it
-        real(wp), allocatable :: H0(:,:), S_shift(:,:), V_atom(:), dq_new(:)
+        real(wp), allocatable :: S_shift(:,:), dq_new(:)
         class(mixer_t), allocatable :: mx
         logical :: has_dE
 
         natoms = struct%natoms
-        allocate(H0(st%bas%norb_total, st%bas%norb_total))
         allocate(S_shift(st%bas%norb_total, st%bas%norb_total))
-        allocate(V_atom(natoms))
         allocate(dq_new(natoms))
 
-        call build_hs(struct, st%bas, H0, st%S)
+        call build_hs(struct, st%bas, st%H0, st%S)
         call build_gamma(struct, st%bas, st%gamma, gamma_kind)
 
-        st%dq = 0.0_wp
+        ! Δq initial = charge formelle fournie par l'input géométrie
+        ! (0 par défaut). Convention : charge>0 ⇒ Δq>0.
+        do ia = 1, natoms
+            st%dq(ia) = struct%atoms(ia)%charge
+        end do
+        st%lshell_q = 0.0_wp
         call set_occ(st%bas%nelec, st%bas%norb_total, st%occ)
 
         st%converged = .false.
@@ -165,16 +174,18 @@ contains
         call write_dftb_scc_header(.true., maxit, tol)
 
         do it = 1, maxit
-            call coulomb_potential(st%gamma, st%dq, V_atom)
-            call build_shift(st%S, V_atom, st%bas, S_shift)
-            call build_ham(H0, S_shift, st%H)
+            ! Shift l-shell : utilise lshell_q courant (0 à la première
+            ! itération, recalculé en fin d'itération sinon).
+            call build_shift(st%S, st%gamma, st%dq, st%bas, S_shift)
+            call build_ham(st%H0, S_shift, st%H)
 
             call solve_gen_eig(st%H, st%S, st%eig, st%C)
             call build_density(st%C, st%occ, st%P)
-            call mulliken_charges(st%P, st%S, st%bas, st%q)
-            call delta_charges(st%q, st%bas, dq_new)
+            call atomic_population(st%P, st%S, st%bas, st%q)
+            call partial_atomic_dq(st%q, st%bas, dq_new)
+            call lshell_population(st%P, st%S, st%bas, st%lshell_q)
 
-            if (write_matrix) call write_dftb_matrices(H0, st%S, st%P, st%C)
+            if (write_matrix) call write_dftb_matrices(st%H0, st%S, st%P, st%C, st%gamma)
 
             st%e_band = sum(st%occ * st%eig)
             e_coul_it = coulomb_energy(st%gamma, dq_new)
@@ -209,40 +220,22 @@ contains
 
         if (.not. st%converged) st%niter = maxit
 
+        ! lshell_q est déjà à jour (calculé à chaque itération).
+        ! mshell_q n'intervient pas dans le shift : calcul unique
+        ! après convergence.
+        call mshell_population(st%P, st%S, st%bas, st%mshell_q)
+
         call write_dftb_scc_status(st%converged, st%niter)
 
         if (allocated(mx)) then
             call mx%free()
             deallocate(mx)
         end if
-        deallocate(H0, S_shift, V_atom, dq_new)
+        deallocate(S_shift, dq_new)
     end subroutine solve_scc_loop
 
 
     !-- Helpers --------------------------------------------------------
-
-    !> S_shift_μν = (1/2) S_μν (V_A(μ) + V_B(ν))
-    subroutine build_shift(S, V_atom, bas, S_shift)
-        real(wp),             intent(in)  :: S(:,:)
-        real(wp),             intent(in)  :: V_atom(:)
-        type(basis_system_t), intent(in)  :: bas
-        real(wp),             intent(out) :: S_shift(:,:)
-
-        integer  :: mu, nu, ia, ib, norb
-        real(wp) :: V_mu, V_nu
-
-        norb = size(S, 1)
-        do mu = 1, norb
-            ia   = atom_of_orbital(bas, mu)
-            V_mu = V_atom(ia)
-            do nu = 1, norb
-                ib   = atom_of_orbital(bas, nu)
-                V_nu = V_atom(ib)
-                S_shift(mu, nu) = 0.5_wp * S(mu, nu) * (V_mu + V_nu)
-            end do
-        end do
-    end subroutine build_shift
-
 
     !> H_μν = H0_μν + S_shift_μν
     subroutine build_ham(H0, S_shift, H)
@@ -259,36 +252,26 @@ contains
         type(dftbstate_t), intent(inout) :: st
         integer,           intent(in)    :: scheme
 
-        integer :: norb, natoms
+        integer :: norb, natoms, nls
         norb   = st%bas%norb_total
         natoms = struct%natoms
+        nls    = st%bas%lshell_orbs
 
-        if (.not. allocated(st%H))   allocate(st%H(norb, norb))
-        if (.not. allocated(st%S))   allocate(st%S(norb, norb))
-        if (.not. allocated(st%C))   allocate(st%C(norb, norb))
-        if (.not. allocated(st%eig)) allocate(st%eig(norb))
-        if (.not. allocated(st%P))   allocate(st%P(norb, norb))
-        if (.not. allocated(st%occ)) allocate(st%occ(norb))
-        if (.not. allocated(st%q))   allocate(st%q(natoms))
-        if (.not. allocated(st%dq))  allocate(st%dq(natoms))
+        if (.not. allocated(st%H))        allocate(st%H(norb, norb))
+        if (.not. allocated(st%H0))       allocate(st%H0(norb, norb))
+        if (.not. allocated(st%S))        allocate(st%S(norb, norb))
+        if (.not. allocated(st%C))        allocate(st%C(norb, norb))
+        if (.not. allocated(st%eig))      allocate(st%eig(norb))
+        if (.not. allocated(st%P))        allocate(st%P(norb, norb))
+        if (.not. allocated(st%occ))      allocate(st%occ(norb))
+        if (.not. allocated(st%q))        allocate(st%q(natoms))
+        if (.not. allocated(st%dq))       allocate(st%dq(natoms))
+        if (.not. allocated(st%lshell_q)) allocate(st%lshell_q(nls))
+        if (.not. allocated(st%mshell_q)) allocate(st%mshell_q(norb))
         if (scheme /= SCHEME_BASIC) then
             if (.not. allocated(st%gamma)) allocate(st%gamma(natoms, natoms))
         end if
     end subroutine ensure_allocated
-
-
-    pure function atom_of_orbital(bas, iorb) result(ia)
-        type(basis_system_t), intent(in) :: bas
-        integer,              intent(in) :: iorb
-        integer :: ia, k
-        ia = 1
-        do k = 1, size(bas%atom_orb_start)
-            if (iorb >= bas%atom_orb_start(k) .and. &
-                iorb <  bas%atom_orb_start(k) + bas%atom_norb(k)) then
-                ia = k; return
-            end if
-        end do
-    end function atom_of_orbital
 
 
     !> Aufbau closed-shell : double occupation par orbitale.

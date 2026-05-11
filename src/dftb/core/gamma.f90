@@ -40,8 +40,8 @@ contains
             gamma(i, i) = bas%elems(ei)%U_s
             do j = i + 1, struct%natoms
                 ej = bas%atom_elem(j)
-                r  = struct%dist(i, j)
-                gamma(i, j) = select_gamma(k, bas%elems(ei)%U_s, &
+                r  = struct%dist(i, j) 
+                gamma(i, j) = 1/r - select_gamma(k, bas%elems(ei)%U_s, &
                                               bas%elems(ej)%U_s, r)
                 gamma(j, i) = gamma(i, j)
             end do
@@ -104,11 +104,12 @@ contains
                 g = -0.5_wp * (U_a + U_b)
             else
                 g = -0.5_wp * ( (tauA * tauB) / (tauA + tauB) &
-                              + (tauA * tauB)**2 / (tauA + tauB)**3 )
+                              + (tauA * tauB)**2 * (tauA + tauB)**(-3) )
             end if
         else if (abs(U_a - U_b) < TOL_U) then
             tauM = 0.5_wp * (tauA + tauB)
-            g = exp(-tauM * r) * ( 1.0_wp / r + 0.6875_wp * tauM &
+            g = exp(-tauM * r) * ( 1.0_wp / r &
+                + 0.6875_wp * tauM &
                 + 0.1875_wp * r * tauM**2 &
                 + 0.020833333333_wp * r**2 * tauM**3 )
         else
@@ -122,7 +123,7 @@ contains
         real(wp), intent(in) :: r, a, b
         real(wp) :: v, d
         d = a*a - b*b
-        v = exp(-a * r) * ( 0.5_wp * b**4 * a / d**2 &
-                          - (b**6 - 3.0_wp * b**4 * a**2) / (r * d**3) )
+        v = exp(-a * r) * ( (0.5_wp * b**4 * a) / (d**2) - &
+                          ( b**6 - 3.0_wp * b**4 * a**2 ) * (r * d**3)**(-1) )
     end function gamma_E
 end module gamma_mod
