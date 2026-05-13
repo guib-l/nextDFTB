@@ -1,15 +1,16 @@
 # nextDFTB executable — assemblé depuis les modules dans src/.
 
 add_executable(nextdftb
-    base/kind.f90
-    base/constants.f90
-    base/units.f90
+    utils/kind.f90
+    utils/constants.f90
+    utils/units.f90
     base/atoms.f90
     base/molecule.f90
+    base/neighbor.f90
     base/structure.f90
-    base/globals.f90
-    base/method_calc.f90
-    base/method_basis.f90
+    globals.f90
+    driver/abstract_calc.f90
+    driver/abstract_basis.f90
 
     errors/errors.f90
 
@@ -35,6 +36,7 @@ add_executable(nextdftb
 
     dftb/dftbstate.f90
     dftb/write_dftb.f90
+    dftb/orbitals.f90
     dftb/core/skrot.f90
     dftb/core/matel.f90
     dftb/core/gamma.f90

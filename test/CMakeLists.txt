@@ -4,11 +4,12 @@
 # déjà déclarées dans src/CMakeLists.txt — chemins relatifs au répertoire
 # parent).
 set(NEXTDFTB_TEST_SOURCES
-    ${CMAKE_SOURCE_DIR}/src/base/kind.f90
-    ${CMAKE_SOURCE_DIR}/src/base/constants.f90
-    ${CMAKE_SOURCE_DIR}/src/base/units.f90
+    ${CMAKE_SOURCE_DIR}/src/utils/kind.f90
+    ${CMAKE_SOURCE_DIR}/src/utils/constants.f90
+    ${CMAKE_SOURCE_DIR}/src/utils/units.f90
     ${CMAKE_SOURCE_DIR}/src/base/atoms.f90
     ${CMAKE_SOURCE_DIR}/src/base/molecule.f90
+    ${CMAKE_SOURCE_DIR}/src/base/neighbor.f90
     ${CMAKE_SOURCE_DIR}/src/base/structure.f90
     ${CMAKE_SOURCE_DIR}/src/errors/errors.f90
     ${CMAKE_SOURCE_DIR}/src/parser/parse_geometry.f90

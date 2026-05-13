@@ -24,7 +24,7 @@ module dftb
                               skf_build_rep  => build_repulsion, &
                               skf_build_elec => build_electronic, &
                               skf_get_mass   => get_mass
-    use matel,         only: build_basis_system
+    use orbitals_mod,  only: build_basis_system
     use scc,           only: solve_scc
     use repulsif,      only: repulsive_energy
     use coulomb,       only: coulomb_energy

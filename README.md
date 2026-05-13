@@ -28,8 +28,7 @@ geometry.dat
 
 ```
 src/
-├── base/         kind, constants, units, atoms, molecule, structure, globals,
-│                 method_basis, method_calc
+├── base/         atoms, molecule, structure, neighbor
 ├── dftb/
 │   ├── core/     matel, gamma, density, skrot
 │   ├── compute/  dftb_energy, dftb_grad, coulomb, charges
@@ -38,6 +37,7 @@ src/
 │   │   └── mixer/  mixer (interface), simple, random, broyden, factory
 │   ├── repulsif/ repulsif
 │   ├── disp/, pola/        (placeholders)
+│   ├── orbitals.f90        construction de la base d'orbitales
 │   ├── dftbstate.f90       état du dernier calcul
 │   ├── write_dftb.f90      sortie spécialisée DFTB
 │   └── dftb.f90            façade publique (type dftb_calc_t)
@@ -45,13 +45,15 @@ src/
 │                 slakos, write_skf
 ├── dft/          dft.f90, write_dft.f90 (placeholders)
 ├── driver/
+│   ├── abstract_calc.f90, abstract_basis.f90  interfaces abstraites
 │   ├── driver.f90, single_point.f90
 │   └── opt/, md/           (placeholders)
 ├── parser/       parse_input, parse_geometry, keywords, property
-├── utils/
+├── utils/        kind, constants, units
 │   ├── logger/   timer, logger
 │   └── output/   output_base, write_output, write_matrix
 ├── errors/       errors (gestion centralisée)
+├── globals.f90   variables globales partagées
 ├── cli.f90       CLI minimaliste
 └── main.f90      entrée principale
 
@@ -122,31 +124,10 @@ L'interpolation H/S utilise `polint` (Neville, ordre fixe) sur une fenêtre
 centrée autour de r. Les dérivées analytiques sont fournies pour la
 répulsion ; celles de H/S sont obtenues via `dpolint` sur la même fenêtre.
 
-## Prérequis
+## Installation
 
-- CMake ≥ 3.20
-- `gfortran` ≥ 11 (ou un compilateur Fortran 2018 équivalent)
-- LAPACK (`liblapack-dev` sur Debian/Ubuntu)
-- *(optionnel)* OpenMP
-
-## Build
-
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-```
-
-L'exécutable est produit dans `build/src/nextdftb`.
-
-### Options CMake
-
-| Option                   | Défaut  | Description                            |
-|--------------------------|---------|----------------------------------------|
-| `CMAKE_BUILD_TYPE`       | Release | `Debug`, `Release`, `RelWithDebInfo`   |
-| `NEXTDFTB_ENABLE_OPENMP` | ON      | Active OpenMP dans les noyaux          |
-| `NEXTDFTB_ENABLE_TESTS`  | ON      | Compile les tests unitaires `test/`    |
-
-## Utilisation
+Voir [INSTALL.md](INSTALL.md) pour les prérequis, la compilation, les options
+CMake et l'exécution des tests.
 
 ```bash
 build/src/nextdftb input.dat
@@ -333,26 +314,6 @@ Côté code :
 - `utils/logger/timer.f90` — `tic`/`toc`/`elapsed` et registre nommé
   (`timer_record`, `timer_count`, `timer_get`, `timer_reset`) consommé par
   l'écriture du tableau TIMER.
-
-## Tests unitaires
-
-Les tests sont dans `test/`, sans framework externe (CTest pilote l'exécution).
-
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j
-(cd build && ctest --output-on-failure)
-```
-
-Suites courantes :
-
-| Test                     | Cible                                            |
-|--------------------------|--------------------------------------------------|
-| `test_units`             | Conversions Bohr↔Å, Ha↔eV (round-trip)           |
-| `test_atoms`             | Objet `atoms_t` et `atoms_set`                   |
-| `test_structure`         | `structure_init`, `structure_set_atom`, molécule |
-| `test_parse_geometry`    | Round-trip `write_geometry` / `read_geometry`    |
-| `test_utils`             | Helpers utilitaires divers                       |
 
 ## Pipeline de calcul
 

@@ -9,6 +9,7 @@ module structure_mod
     use kinds,        only: wp
     use atoms_mod,    only: atoms_t
     use molecule_mod, only: molecule_t, molecule_init, molecule_add_atom
+    use neighbor_mod, only: neighbor_list_t, build_neigh_list
     implicit none
     private
 
@@ -21,6 +22,7 @@ module structure_mod
         real(wp),         allocatable :: com_mol(:,:)        ! (3, nmolecules)
         real(wp),         allocatable :: dist(:,:)           ! (natoms, natoms)
         real(wp),         allocatable :: dist_mol(:,:)       ! (nmolecules, nmolecules)
+        type(neighbor_list_t)         :: neigh
     contains
         procedure :: get_atoms     => structure_get_atoms
         procedure :: get_molecule  => structure_get_molecule
@@ -30,6 +32,7 @@ module structure_mod
         procedure :: get_dist      => structure_get_dist
         procedure :: set_dist_mol  => structure_set_dist_mol
         procedure :: get_dist_mol  => structure_get_dist_mol
+        procedure :: set_neigh     => structure_set_neigh
         procedure :: initialize    => structure_initialize
     end type structure_t
 
@@ -146,11 +149,32 @@ contains
         d = self%dist_mol(index_1, index_2)
     end function structure_get_dist_mol
 
+    !> Construit la liste des voisins à partir des positions atomiques.
+    !> Requiert `set_dist` au préalable (utilisé pour éviter le recalcul
+    !> des normes).
+    subroutine structure_set_neigh(self, limite_r)
+        class(structure_t), intent(inout) :: self
+        real(wp), optional, intent(in)    :: limite_r
+        real(wp), allocatable :: positions(:,:)
+        integer :: i
+
+        allocate(positions(3, self%natoms))
+        do i = 1, self%natoms
+            positions(:, i) = self%atoms(i)%position
+        end do
+
+        call build_neigh_list(self%natoms, positions, self%neigh, &
+                              limite_r=limite_r, dist=self%dist)
+
+        deallocate(positions)
+    end subroutine structure_set_neigh
+
     subroutine structure_initialize(self)
         class(structure_t), intent(inout) :: self
         call self%set_com()
         call self%set_com_mol()
         call self%set_dist()
         call self%set_dist_mol()
+        call self%set_neigh()
     end subroutine structure_initialize
 end module structure_mod
