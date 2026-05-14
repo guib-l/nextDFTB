@@ -18,7 +18,7 @@ CALC = {
         GAMMA = STDR
         SCHEM = {
             TYPE = SCC
-            MAXSCC = 999
+            MAXSCC = 99
             TOLSCC = 1e-7
         }
         MIXING = {

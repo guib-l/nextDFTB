@@ -48,6 +48,7 @@ module dftbstate
         real(wp), allocatable :: q(:)
         real(wp), allocatable :: dq(:)
         real(wp), allocatable :: lshell_q(:)
+        real(wp), allocatable :: lshell_dq(:)
         real(wp), allocatable :: mshell_q(:)
         real(wp), allocatable :: gamma(:,:)
         real(wp), allocatable :: grad(:,:)

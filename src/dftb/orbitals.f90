@@ -17,6 +17,8 @@ module orbitals_mod
 
     public :: build_basis_system, count_l_shells, lookup_orbital_spec, &
               match_symbol
+    public :: atom_of_orbital, lshell_of_orbital, lshell_norb,         &
+              orbital_of_atom
 
 contains
 
@@ -181,5 +183,68 @@ contains
             end if
         end do
     end function match_symbol
+
+
+    !> Atome auquel appartient l'orbitale globale `iorb`.
+    pure function atom_of_orbital(bas, iorb) result(ia)
+        type(basis_system_t), intent(in) :: bas
+        integer,              intent(in) :: iorb
+        integer :: ia, k
+        ia = 1
+        do k = 1, size(bas%atom_orb_start)
+            if (iorb >= bas%atom_orb_start(k) .and. &
+                iorb <  bas%atom_orb_start(k) + bas%atom_norb(k)) then
+                ia = k; return
+            end if
+        end do
+    end function atom_of_orbital
+
+
+    !> Indice local de l-shell (1=s, 2=p, 3=d) auquel appartient
+    !> l'orbitale globale `iorb`. Suit l'ordre de matel.
+    pure function lshell_of_orbital(bas, iorb) result(ils)
+        type(basis_system_t), intent(in) :: bas
+        integer,              intent(in) :: iorb
+        integer :: ils, ia, local
+        ia    = atom_of_orbital(bas, iorb)
+        local = iorb - bas%atom_orb_start(ia) + 1
+        if (local == 1) then
+            ils = 1
+        else if (local <= 4) then
+            ils = 2
+        else
+            ils = 3
+        end if
+    end function lshell_of_orbital
+
+
+    !> Nombre d'orbitales du shell `ils` (1=s, 2=p, 3=d) sur l'atome ia.
+    pure function lshell_norb(bas, ia, ils) result(n)
+        type(basis_system_t), intent(in) :: bas
+        integer,              intent(in) :: ia, ils
+        integer :: n
+        select case (ils)
+        case (1); n = 1
+        case (2); n = 3
+        case (3); n = 5
+        case default; n = 1
+        end select
+        if (n > bas%atom_norb(ia)) n = bas%atom_norb(ia)
+    end function lshell_norb
+
+
+    !> Liste des orbitales globales appartenant à l'atome `iat`.
+    pure function orbital_of_atom(bas, iat) result(orbs)
+        type(basis_system_t), intent(in) :: bas
+        integer,              intent(in) :: iat
+        integer, allocatable :: orbs(:)
+        integer :: i, o0, n
+        o0 = bas%atom_orb_start(iat)
+        n  = bas%atom_norb(iat)
+        allocate(orbs(n))
+        do i = 1, n
+            orbs(i) = o0 + i - 1
+        end do
+    end function orbital_of_atom
 
 end module orbitals_mod

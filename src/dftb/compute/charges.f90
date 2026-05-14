@@ -10,37 +10,14 @@
 !>   5=dxy, 6=dyz, 7=dzx, 8=dx2−y2, 9=d3z2−r2
 module charges
     use kinds,     only: wp
-    use dftbstate, only: basis_system_t
+    use dftbstate, only: basis_system_t, dftbstate_t
     implicit none
     private
 
-    public :: atomic_population, partial_atomic_dq
-    public :: lshell_population, mshell_population
+    public :: partial_atomic_dq, partial_lshell_dq
+    public :: mulliken_population, build_charges
 
 contains
-
-    !> Population atomique de Mulliken : q_A = Σ_{μ∈A} (P S)_{μμ}.
-    subroutine atomic_population(P, S, bas, q)
-        real(wp),             intent(in)  :: P(:,:), S(:,:)
-        type(basis_system_t), intent(in)  :: bas
-        real(wp),             intent(out) :: q(:)
-
-        integer  :: ia, mu, nu, o0, n
-        real(wp) :: ps_diag
-
-        do ia = 1, size(q)
-            o0 = bas%atom_orb_start(ia)
-            n  = bas%atom_norb(ia)
-            ps_diag = 0.0_wp
-            do mu = o0, o0 + n - 1
-                do nu = 1, size(P, 1)
-                    ps_diag = ps_diag + P(mu, nu) * S(nu, mu)
-                end do
-            end do
-            q(ia) = ps_diag
-        end do
-    end subroutine atomic_population
-
 
     !> Charges partielles dq_A = q_neutral_A - q_A (convention chimie).
     subroutine partial_atomic_dq(q, bas, dq)
@@ -55,48 +32,50 @@ contains
     end subroutine partial_atomic_dq
 
 
-    !> Population par sous-couche (l-shell). Stockage 1D plat de taille
-    !> bas%lshell_orbs ; index de la 1ère sous-couche de A est
-    !> bas%atom_lshell_start(A).
-    !> Convention : indices locaux 1..nls = (s, p, d) selon l_max.
-    subroutine lshell_population(P, S, bas, lshell_q)
-        real(wp),             intent(in)  :: P(:,:), S(:,:)
+    !> Charges partielles par sous-couche :
+    !>   dq_{A,l} = q_neutral_{A,l} - lshell_q_{A,l}.
+    subroutine partial_lshell_dq(bas, lshell_q, lshell_dq)
         type(basis_system_t), intent(in)  :: bas
-        real(wp),             intent(out) :: lshell_q(:)
+        real(wp),             intent(in)  :: lshell_q(:)
+        real(wp),             intent(out) :: lshell_dq(:)
 
-        integer  :: ia, ils, ls0, o0, mu_lo, mu_hi, mu, nu, natoms
-        real(wp) :: acc
+        integer  :: ia, ils, ie, ls0, natoms
+        real(wp) :: q_neutral_l
 
-        lshell_q = 0.0_wp
         natoms = size(bas%atom_norb)
         do ia = 1, natoms
-            o0  = bas%atom_orb_start(ia)
+            ie  = bas%atom_elem(ia)
             ls0 = bas%atom_lshell_start(ia)
             do ils = 1, bas%atom_nlshell(ia)
-                call lshell_orb_range(ils, o0, mu_lo, mu_hi)
-                acc = 0.0_wp
-                do mu = mu_lo, mu_hi
-                    do nu = 1, size(P, 1)
-                        acc = acc + P(mu, nu) * S(nu, mu)
-                    end do
-                end do
-                lshell_q(ls0 + ils - 1) = acc
+                select case (ils)
+                case (1); q_neutral_l = bas%elems(ie)%occ_s
+                case (2); q_neutral_l = bas%elems(ie)%occ_p
+                case (3); q_neutral_l = bas%elems(ie)%occ_d
+                case default; q_neutral_l = 0.0_wp
+                end select
+                lshell_dq(ls0 + ils - 1) = q_neutral_l - lshell_q(ls0 + ils - 1)
             end do
         end do
-    end subroutine lshell_population
+    end subroutine partial_lshell_dq
 
 
-    !> Population par orbitale individuelle (m-shell). Stockage 1D plat
-    !> de taille bas%norb_total ; un élément par orbitale μ.
-    subroutine mshell_population(P, S, bas, mshell_q)
+    !> Populations Mulliken en une seule passe :
+    !>   mshell_q_μ = Σ_ν P_{μν} S_{νμ}
+    !>   lshell_q_{A,l} = Σ_{μ ∈ shell l de A} mshell_q_μ
+    !>   q_A           = Σ_l lshell_q_{A,l}
+    subroutine mulliken_population(P, S, bas, q, lshell_q, mshell_q)
         real(wp),             intent(in)  :: P(:,:), S(:,:)
         type(basis_system_t), intent(in)  :: bas
+        real(wp),             intent(out) :: q(:)
+        real(wp),             intent(out) :: lshell_q(:)
         real(wp),             intent(out) :: mshell_q(:)
 
-        integer  :: mu, nu, norb
+        integer  :: ia, ils, mu, nu, o0, n, ls0, local, norb, natoms
         real(wp) :: acc
 
-        norb = size(P, 1)
+        norb   = size(P, 1)
+        natoms = size(bas%atom_norb)
+
         do mu = 1, norb
             acc = 0.0_wp
             do nu = 1, norb
@@ -104,24 +83,39 @@ contains
             end do
             mshell_q(mu) = acc
         end do
-    end subroutine mshell_population
+
+        lshell_q = 0.0_wp
+        do ia = 1, natoms
+            o0  = bas%atom_orb_start(ia)
+            n   = bas%atom_norb(ia)
+            ls0 = bas%atom_lshell_start(ia)
+            acc = 0.0_wp
+            do mu = o0, o0 + n - 1
+                local = mu - o0 + 1
+                if (local == 1) then
+                    ils = 1
+                else if (local <= 4) then
+                    ils = 2
+                else
+                    ils = 3
+                end if
+                lshell_q(ls0 + ils - 1) = lshell_q(ls0 + ils - 1) + mshell_q(mu)
+                acc = acc + mshell_q(mu)
+            end do
+            q(ia) = acc
+        end do
+    end subroutine mulliken_population
 
 
-    !> Plage d'orbitales [mu_lo, mu_hi] correspondant à la l-shell
-    !> locale `ils` (1=s, 2=p, 3=d) d'un atome dont la 1ère orbitale
-    !> est `o0`. Suit l'ordre de matel (1=s ; 2..4=p ; 5..9=d).
-    pure subroutine lshell_orb_range(ils, o0, mu_lo, mu_hi)
-        integer, intent(in)  :: ils, o0
-        integer, intent(out) :: mu_lo, mu_hi
-        select case (ils)
-        case (1)
-            mu_lo = o0;     mu_hi = o0
-        case (2)
-            mu_lo = o0 + 1; mu_hi = o0 + 3
-        case (3)
-            mu_lo = o0 + 4; mu_hi = o0 + 8
-        case default
-            mu_lo = o0;     mu_hi = o0 - 1
-        end select
-    end subroutine lshell_orb_range
+    !> Wrapper : remplit l'état DFTB (q, dq, lshell_q, lshell_dq,
+    !> mshell_q) à partir de P et S.
+    subroutine build_charges(P, S, st)
+        real(wp),          intent(in)    :: P(:,:), S(:,:)
+        type(dftbstate_t), intent(inout) :: st
+
+        call mulliken_population(P, S, st%bas, st%q, st%lshell_q, st%mshell_q)
+        call partial_atomic_dq(st%q, st%bas, st%dq)
+        call partial_lshell_dq(st%bas, st%lshell_q, st%lshell_dq)
+    end subroutine build_charges
+
 end module charges
