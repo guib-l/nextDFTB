@@ -38,6 +38,7 @@ module keywords
     character(len=*), parameter, public :: KW_MAXSCC = "MAXSCC"
     character(len=*), parameter, public :: KW_TOLSCC = "TOLSCC"
     character(len=*), parameter, public :: KW_WRITE_MATRIX = "WRITE_MATRIX"
+    character(len=*), parameter, public :: KW_DOGRAD       = "DOGRAD"
     character(len=*), parameter, public :: KW_MIXING       = "MIXING"
     character(len=*), parameter, public :: KW_MIX_FACTOR   = "FACTOR"
     character(len=*), parameter, public :: KW_MIX_HISTORY  = "HISTORY"

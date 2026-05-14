@@ -3,7 +3,7 @@
 !> Implémente l'interface abstraite `method_calc_t` :
 !>   - init(struct, basis, method)  : stockage des entrées
 !>   - build()                      : chargement SKF + base + allocation
-!>   - execute()                    : SCC + énergies
+!>   - execute()                    : SCC + énergies + gradient
 !>   - get_total_energy()           : énergie totale
 !>   - get_total_gradient()         : gradient (3, natoms)
 !>   - write_output()               : écriture du résultat final
@@ -29,8 +29,9 @@ module dftb
     use repulsif,      only: repulsive_energy
     use coulomb,       only: coulomb_energy
     use dftb_energy,   only: total_energy, electronic_energy, scc_energy
-    use dftb_grad,     only: zero_gradient
-    use write_dftb,    only: write_dftb_final, write_dftb_population
+    use dftb_grad,     only: compute_gradient
+    use write_dftb,    only: write_dftb_final, write_dftb_population, &
+                              write_dftb_gradient
     use errors,        only: fatal
     implicit none
     private
@@ -127,7 +128,11 @@ contains
                                           self%state%e_coul, &
                                           self%state%e_rep)
 
-        call zero_gradient(self%state%grad)
+        if (self%prop%dograd) then
+            call compute_gradient(self%struct, self%state, self%prop)
+        else
+            self%state%grad = 0.0_wp
+        end if
     end subroutine dftb_execute
 
 
@@ -151,6 +156,7 @@ contains
         call write_dftb_final(self%state%e_total, self%state%e_band,  &
                               self%state%e_elec,  self%state%e_scc,    &
                               self%state%e_rep)
+        if (self%prop%dograd) call write_dftb_gradient(self%state%grad)
         call write_dftb_population(self%state)
     end subroutine dftb_write_output
 

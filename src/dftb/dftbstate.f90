@@ -1,8 +1,8 @@
 !> Objet `dftbstate` : état du dernier calcul DFTB.
 !>
 !> Réunit le système orbitalaire (mapping atome → orbitales) et les
-!> matrices résultantes (H, S, C, P, gamma) ainsi que les énergies et
-!> les charges Mulliken.
+!> matrices résultantes (H, S, C, P, W, gamma) ainsi que les énergies
+!> et les charges Mulliken.
 module dftbstate
     use kinds,         only: wp
     use constants,     only: SYMBOL_LEN
@@ -44,6 +44,7 @@ module dftbstate
         real(wp), allocatable :: C(:,:)
         real(wp), allocatable :: eig(:)
         real(wp), allocatable :: P(:,:)
+        real(wp), allocatable :: W(:,:)
         real(wp), allocatable :: occ(:)
         real(wp), allocatable :: q(:)
         real(wp), allocatable :: dq(:)

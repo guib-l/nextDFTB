@@ -20,6 +20,7 @@ module write_dftb
     public :: write_dftb_scc_header, write_dftb_scc_iter
     public :: write_dftb_scc_status, write_dftb_final
     public :: write_dftb_matrices, write_dftb_population
+    public :: write_dftb_gradient
 
     !> Objet de sortie DFTB. Stocke les résultats essentiels et délègue
     !> à `write_dftb_final` pour l'écriture finale.
@@ -85,12 +86,33 @@ contains
 
         call subsection("Energies (Hartree)")
         call kv_real_es("E_band",        e_band)
-        call kv_real_es("E_H0",  e_elec)
-        call kv_real_es("E_electronic",  e_elec-e_scc)
+        call kv_real_es("E_H0",          e_elec)
+        call kv_real_es("E_electronic",  e_elec+e_scc)
         call kv_real_es("E_scc",         e_scc)
         call kv_real_es("E_repulsive",   e_rep)
         call kv_real_es("E_total",       e_total)
     end subroutine write_dftb_final
+
+
+    !> Affiche le gradient (3, natoms) en Hartree/Bohr.
+    subroutine write_dftb_gradient(grad)
+        real(wp), intent(in) :: grad(:,:)
+        integer :: ia, natoms
+        character(len=120) :: buf
+
+        if (.not. output_is_open()) return
+
+        natoms = size(grad, 2)
+        call line("")
+        call subsection("Gradient (Hartree/Bohr)")
+        call line(" Atom         dE/dx              dE/dy              dE/dz")
+        call line(" -----------------------------------------------------------------")
+        do ia = 1, natoms
+            write(buf, '(i5,3x,es18.8,1x,es18.8,1x,es18.8)') &
+                ia, grad(1, ia), grad(2, ia), grad(3, ia)
+            call line(trim(buf))
+        end do
+    end subroutine write_dftb_gradient
 
 
     !> Affiche les charges atomiques (dq) puis les populations par

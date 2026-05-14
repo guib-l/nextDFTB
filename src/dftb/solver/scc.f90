@@ -73,7 +73,7 @@ contains
         call set_occ(st%bas%nelec, st%bas%norb_total, st%occ)
 
         call solve_gen_eig(st%H, st%S, st%eig, st%C)
-        call build_density(st%C, st%occ, st%P)
+        call build_density(st%C, st%occ, st%eig, st%P, st%W)
         call build_charges(st%P, st%S, st)
 
         if (write_matrix) call write_dftb_matrices(st%H, st%S, st%P, st%C, st%gamma)
@@ -114,7 +114,7 @@ contains
 
         call set_occ(st%bas%nelec, st%bas%norb_total, st%occ)
         call solve_gen_eig(st%H, st%S, st%eig, st%C)
-        call build_density(st%C, st%occ, st%P)
+        call build_density(st%C, st%occ, st%eig, st%P, st%W)
         call build_charges(st%P, st%S, st)
 
         if (write_matrix) call write_dftb_matrices(st%H0, st%S, st%P, st%C, st%gamma)
@@ -176,7 +176,7 @@ contains
             call build_ham(st%H0, S_shift, st%H)
 
             call solve_gen_eig(st%H, st%S, st%eig, st%C)
-            call build_density(st%C, st%occ, st%P)
+            call build_density(st%C, st%occ, st%eig, st%P, st%W)
 
             ! Mémoriser dq d'entrée avant écrasement par les nouvelles
             ! charges Mulliken : sert au test de convergence et au mixage.
@@ -258,6 +258,7 @@ contains
         if (.not. allocated(st%C))         allocate(st%C(norb, norb))
         if (.not. allocated(st%eig))       allocate(st%eig(norb))
         if (.not. allocated(st%P))         allocate(st%P(norb, norb))
+        if (.not. allocated(st%W))         allocate(st%W(norb, norb))
         if (.not. allocated(st%occ))       allocate(st%occ(norb))
         if (.not. allocated(st%q))         allocate(st%q(natoms))
         if (.not. allocated(st%dq))        allocate(st%dq(natoms))

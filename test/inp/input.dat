@@ -16,6 +16,7 @@ CALC = {
     DFTB = {
         WRITE_MATRIX = True 
         GAMMA = STDR
+        DOGRAD = True
         SCHEM = {
             TYPE = SCC
             MAXSCC = 99

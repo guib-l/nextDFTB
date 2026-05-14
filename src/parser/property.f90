@@ -58,6 +58,7 @@ module property
         integer                 :: maxscc       = 100
         real(wp)                :: tolscc       = 1.0e-5_wp
         logical                 :: write_matrix = .false.
+        logical                 :: dograd       = .false.
         type(property_mixer_t)  :: mixing
     end type property_dftb_t
 

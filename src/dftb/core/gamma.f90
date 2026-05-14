@@ -16,8 +16,12 @@ module gamma_mod
     implicit none
     private
 
+    real(wp), parameter :: EPS_FD = 1.0e-4_wp
+
     public :: build_gamma, select_gamma
     public :: gamma_base, gamma_mean, gamma_stdr
+    public :: build_dgamma, select_dgamma
+    public :: dgamma_base, dgamma_mean, dgamma_stdr
 
 contains
 
@@ -40,7 +44,7 @@ contains
             gamma(i, i) = bas%elems(ei)%U_s
             do j = i + 1, struct%natoms
                 ej = bas%atom_elem(j)
-                r  = struct%dist(i, j) 
+                r  = struct%dist(i, j)
                 gamma(i, j) = 1/r - select_gamma(k, bas%elems(ei)%U_s, &
                                               bas%elems(ej)%U_s, r)
                 gamma(j, i) = gamma(i, j)
@@ -126,4 +130,101 @@ contains
         v = exp(-a * r) * ( (0.5_wp * b**4 * a) / (d**2) - &
                           ( b**6 - 3.0_wp * b**4 * a**2 ) * (r * d**3)**(-1) )
     end function gamma_E
+
+
+    !-- Dérivées numériques par rapport à r ----------------------------
+
+    !> Dérivée par différence finie de γ_AB = 1/r par rapport à r.
+    function dgamma_base(r) result(dg)
+        real(wp), intent(in) :: r
+        real(wp) :: dg
+        dg = (gamma_base(r + EPS_FD) - gamma_base(r - EPS_FD)) &
+             / (2.0_wp * EPS_FD)
+    end function dgamma_base
+
+
+    !> Dérivée par différence finie de γ_AB (Klopman-Ohno) par rapport à r.
+    function dgamma_mean(U_a, U_b, r) result(dg)
+        real(wp), intent(in) :: U_a, U_b, r
+        real(wp) :: dg
+        dg = (gamma_mean(U_a, U_b, r + EPS_FD) &
+              - gamma_mean(U_a, U_b, r - EPS_FD)) / (2.0_wp * EPS_FD)
+    end function dgamma_mean
+
+
+    !> Dérivée par différence finie de γ_AB (Slater) par rapport à r.
+    function dgamma_stdr(U_a, U_b, r) result(dg)
+        real(wp), intent(in) :: U_a, U_b, r
+        real(wp) :: dg
+        dg = (gamma_stdr(U_a, U_b, r + EPS_FD) &
+              - gamma_stdr(U_a, U_b, r - EPS_FD)) / (2.0_wp * EPS_FD)
+    end function dgamma_stdr
+
+
+    !> Sélecteur de la dérivée des éléments. Retourne 0 par défaut.
+    function select_dgamma(kind, U_a, U_b, r) result(dg)
+        integer,  intent(in) :: kind
+        real(wp), intent(in) :: U_a, U_b, r
+        real(wp) :: dg
+
+        select case (kind)
+        case (GK_BASE)
+            dg = dgamma_base(r)
+        case (GK_MEAN)
+            dg = dgamma_mean(U_a, U_b, r)
+        case (GK_STDR)
+            dg = dgamma_stdr(U_a, U_b, r)
+        case default
+            dg = 0.0_wp
+        end select
+    end function select_dgamma
+
+
+    !> Construit la dérivée de la matrice γ (natoms × natoms) par
+    !> rapport à la coordonnée `dof` (1=x, 2=y, 3=z) de l'atome `katom`.
+    !> Différence finie centrée sur les positions atomiques.
+    subroutine build_dgamma(struct, bas, katom, dof, dgamma, kind)
+        type(structure_t),    intent(in)  :: struct
+        type(basis_system_t), intent(in)  :: bas
+        integer,              intent(in)  :: katom, dof
+        real(wp),             intent(out) :: dgamma(:,:)
+        integer, optional,    intent(in)  :: kind
+
+        integer  :: i, j, ei, ej, k, natoms
+        real(wp) :: pos_k(3), pos_kp(3), pos_km(3)
+        real(wp) :: rp, rm, gp, gm
+        real(wp) :: Ua, Ub
+
+        k = GK_MEAN
+        if (present(kind)) k = kind
+
+        natoms = struct%natoms
+        dgamma = 0.0_wp
+
+        pos_k  = struct%atoms(katom)%position
+        pos_kp = pos_k
+        pos_km = pos_k
+        pos_kp(dof) = pos_k(dof) + EPS_FD
+        pos_km(dof) = pos_k(dof) - EPS_FD
+
+        ! Seules les paires (katom, j) avec j /= katom dépendent de la
+        ! position de katom. Le terme diagonal γ_AA = U_A est constant.
+        ei = bas%atom_elem(katom)
+        Ua = bas%elems(ei)%U_s
+        do j = 1, natoms
+            if (j == katom) cycle
+            ej = bas%atom_elem(j)
+            Ub = bas%elems(ej)%U_s
+            rp = norm2(pos_kp - struct%atoms(j)%position)
+            rm = norm2(pos_km - struct%atoms(j)%position)
+            gp = 1.0_wp / rp - select_gamma(k, Ua, Ub, rp)
+            gm = 1.0_wp / rm - select_gamma(k, Ua, Ub, rm)
+            dgamma(katom, j) = (gp - gm) / (2.0_wp * EPS_FD)
+            dgamma(j, katom) = dgamma(katom, j)
+        end do
+
+        ! Silence unused: i (boucle non utilisée ici)
+        i = 0
+    end subroutine build_dgamma
+
 end module gamma_mod

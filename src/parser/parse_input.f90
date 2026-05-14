@@ -134,6 +134,7 @@ contains
                 case (KW_GAMMA)
                     inp%calc%dftb%gamma_kind = parse_gamma_kind(val)
                 case (KW_WRITE_MATRIX); inp%calc%dftb%write_matrix = bool_value(val)
+                case (KW_DOGRAD);       inp%calc%dftb%dograd       = bool_value(val)
                 case default
                     call warn("parse_input", "unknown CALC.DFTB key: "//trim(key))
                 end select

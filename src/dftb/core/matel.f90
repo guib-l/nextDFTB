@@ -18,7 +18,11 @@ module matel
     implicit none
     private
 
+    real(wp), parameter :: EPS_FD = 1.0e-4_wp
+
     public :: build_hs, build_hs_diag, build_hs_offdiag
+    public :: build_off_block, build_diag_block
+    public :: build_off_dblock, build_diag_dblock
 
 contains
 
@@ -126,20 +130,96 @@ contains
         type(basis_system_t), intent(in)  :: bas
         integer,              intent(in)  :: i, j
         real(wp),             intent(out) :: hblk(:,:), sblk(:,:)
-        integer :: ni, nj, mu, nu
+
+        call off_block_at(struct%atoms(i)%position, struct%atoms(j)%position, &
+                          struct%atoms(i)%symbol, struct%atoms(j)%symbol,     &
+                          bas%atom_norb(i), bas%atom_norb(j), hblk, sblk)
+    end subroutine build_off_block
+
+
+    !> Dérivée numérique centrée du bloc hors-diagonal (ni × nj) entre
+    !> les atomes i et j par rapport à la coordonnée `dof` (1=x, 2=y,
+    !> 3=z) de l'atome `katom`. Si katom n'est ni i ni j la dérivée est
+    !> nulle. Pas de différence finie : EPS_FD (paramètre de module).
+    subroutine build_off_dblock(struct, bas, i, j, katom, dof, dhblk, dsblk)
+        type(structure_t),    intent(in)  :: struct
+        type(basis_system_t), intent(in)  :: bas
+        integer,              intent(in)  :: i, j, katom, dof
+        real(wp),             intent(out) :: dhblk(:,:), dsblk(:,:)
+
+        real(wp) :: pos_i(3), pos_j(3), pos_ip(3), pos_im(3)
+        real(wp) :: pos_jp(3), pos_jm(3)
+        real(wp), allocatable :: h_p(:,:), s_p(:,:), h_m(:,:), s_m(:,:)
+        integer  :: ni, nj
+
+        dhblk = 0.0_wp
+        dsblk = 0.0_wp
+        if (katom /= i .and. katom /= j) return
+
+        ni = bas%atom_norb(i)
+        nj = bas%atom_norb(j)
+        allocate(h_p(ni, nj), s_p(ni, nj), h_m(ni, nj), s_m(ni, nj))
+
+        pos_i = struct%atoms(i)%position
+        pos_j = struct%atoms(j)%position
+        pos_ip = pos_i
+        pos_im = pos_i
+        pos_jp = pos_j
+        pos_jm = pos_j
+
+        if (katom == i) then
+            pos_ip(dof) = pos_i(dof) + EPS_FD
+            pos_im(dof) = pos_i(dof) - EPS_FD
+        else
+            pos_jp(dof) = pos_j(dof) + EPS_FD
+            pos_jm(dof) = pos_j(dof) - EPS_FD
+        end if
+
+        call off_block_at(pos_ip, pos_jp, struct%atoms(i)%symbol,            &
+                          struct%atoms(j)%symbol, ni, nj, h_p, s_p)
+        call off_block_at(pos_im, pos_jm, struct%atoms(i)%symbol,            &
+                          struct%atoms(j)%symbol, ni, nj, h_m, s_m)
+
+        dhblk = (h_p - h_m) / (2.0_wp * EPS_FD)
+        dsblk = (s_p - s_m) / (2.0_wp * EPS_FD)
+
+        deallocate(h_p, s_p, h_m, s_m)
+    end subroutine build_off_dblock
+
+
+    !> Dérivée du bloc diagonal (ni × ni). Les onsites H_ii et S_ii ne
+    !> dépendent pas des positions atomiques : la dérivée est nulle.
+    subroutine build_diag_dblock(bas, i, katom, dof, dhblk, dsblk)
+        type(basis_system_t), intent(in)  :: bas
+        integer,              intent(in)  :: i, katom, dof
+        real(wp),             intent(out) :: dhblk(:,:), dsblk(:,:)
+        integer :: dummy
+        dummy = bas%atom_norb(i) + katom + dof  ! silence unused warnings
+        dhblk = 0.0_wp
+        dsblk = 0.0_wp
+    end subroutine build_diag_dblock
+
+
+    !-- Helpers internes -----------------------------------------------
+
+    !> Construit un bloc off-diagonal (ni × nj) entre deux atomes
+    !> caractérisés par leurs positions et symboles. Implémente la
+    !> logique partagée par `build_off_block` et la différence finie.
+    subroutine off_block_at(pos_i, pos_j, sym_i, sym_j, ni, nj, hblk, sblk)
+        real(wp),         intent(in)  :: pos_i(3), pos_j(3)
+        character(len=*), intent(in)  :: sym_i, sym_j
+        integer,          intent(in)  :: ni, nj
+        real(wp),         intent(out) :: hblk(:,:), sblk(:,:)
+
+        integer  :: mu, nu
         real(wp) :: r, dir(3), x, y, z
         real(wp), allocatable :: h_ab(:), s_ab(:), h_ba(:), s_ba(:)
-        character(len=SYMBOL_LEN) :: sym_i, sym_j
 
         hblk = 0.0_wp; sblk = 0.0_wp
 
-        ni = bas%atom_norb(i); nj = bas%atom_norb(j)
-        sym_i = struct%atoms(i)%symbol
-        sym_j = struct%atoms(j)%symbol
-
-        r = struct%dist(i, j)
+        r = norm2(pos_j - pos_i)
         if (r < 1.0e-8_wp) return
-        dir = (struct%atoms(j)%position - struct%atoms(i)%position) / r
+        dir = (pos_j - pos_i) / r
         x = dir(1); y = dir(2); z = dir(3)
 
         h_ab = skf_get_hamiltonian(trim(sym_i), trim(sym_j), r)
@@ -155,5 +235,6 @@ contains
         end do
 
         deallocate(h_ab, s_ab, h_ba, s_ba)
-    end subroutine build_off_block
+    end subroutine off_block_at
+
 end module matel
