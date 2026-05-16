@@ -17,7 +17,7 @@ module scc
     use density,       only: build_density
     use linalg,        only: solve_gen_eig
     use charges,       only: build_charges
-    use coulomb,       only: coulomb_energy
+    use dftb_energy,   only: coulomb_energy,scc_loop_energy
     use shift,         only: build_shift, SHIFT_DQ
     use mixer,         only: mixer_t
     use mixer_factory, only: make_mixer
@@ -25,6 +25,7 @@ module scc
                               SCHEME_BASIC, SCHEME_NOSCC, SCHEME_SCC
     use write_dftb,    only: write_dftb_scc_header, write_dftb_scc_iter, &
                               write_dftb_scc_status, write_dftb_matrices
+    use timer,         only: start_timer, stop_timer
     use errors,        only: fatal
     implicit none
     private
@@ -45,6 +46,7 @@ contains
         type(property_mixer_t), intent(in)    :: mixing
         type(dftbstate_t),      intent(inout) :: st
 
+        st%scheme = scheme
         call ensure_allocated(struct, st, scheme)
 
         select case (scheme)
@@ -78,7 +80,6 @@ contains
 
         if (write_matrix) call write_dftb_matrices(st%H, st%S, st%P, st%C, st%gamma)
 
-        st%e_band    = sum(st%occ * st%eig)
         st%niter     = 1
         st%converged = .true.
     end subroutine solve_basic
@@ -119,7 +120,6 @@ contains
 
         if (write_matrix) call write_dftb_matrices(st%H0, st%S, st%P, st%C, st%gamma)
 
-        st%e_band    = sum(st%occ * st%eig)
         st%niter     = 1
         st%converged = .true.
 
@@ -169,6 +169,7 @@ contains
         call write_dftb_scc_header(.true., maxit, tol)
 
         do it = 1, maxit
+            call start_timer("LOOP SCC")
             ! Shift atomique : V_A = -Σ_K γ_AK dq_K. L'auto-cohérence
             ! porte exclusivement sur les charges atomiques dq.
             call build_shift(st%S, st%gamma, st%dq, st%bas, S_shift, &
@@ -185,9 +186,7 @@ contains
 
             if (write_matrix) call write_dftb_matrices(st%H0, st%S, st%P, st%C, st%gamma)
 
-            st%e_band = sum(st%occ * st%eig)
-            e_coul_it = coulomb_energy(st%gamma, st%dq)
-            e_scc     = st%e_band + e_coul_it
+            call scc_loop_energy(st, e_coul_it, e_scc)
 
             if (has_dE) then
                 dE_elec = abs(e_scc - e_scc_prev)
@@ -201,6 +200,7 @@ contains
             if (max_diff < tol) then
                 st%niter     = it
                 st%converged = .true.
+                call stop_timer("LOOP SCC")
                 exit
             end if
 
@@ -216,6 +216,7 @@ contains
 
             e_scc_prev = e_scc
             has_dE     = .true.
+            call stop_timer("LOOP SCC")
         end do
 
         if (.not. st%converged) st%niter = maxit

@@ -6,6 +6,7 @@
 module dftbstate
     use kinds,         only: wp
     use constants,     only: SYMBOL_LEN
+    use property,      only: SCHEME_BASIC
     implicit none
     private
 
@@ -55,10 +56,12 @@ module dftbstate
         real(wp), allocatable :: grad(:,:)
         real(wp) :: e_total = 0.0_wp
         real(wp) :: e_band  = 0.0_wp
+        real(wp) :: e_H0    = 0.0_wp
         real(wp) :: e_elec  = 0.0_wp
         real(wp) :: e_scc   = 0.0_wp
         real(wp) :: e_coul  = 0.0_wp
         real(wp) :: e_rep   = 0.0_wp
+        integer  :: scheme    = SCHEME_BASIC
         integer  :: niter     = 0
         logical  :: converged = .false.
     end type dftbstate_t

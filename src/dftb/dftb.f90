@@ -15,8 +15,7 @@ module dftb
     use kinds,         only: wp
     use structure_mod, only: structure_t
     use property,      only: property_basis_t, property_dftb_t,        &
-                              property_method_t,                        &
-                              SCHEME_BASIC, SCHEME_NOSCC, SCHEME_SCC
+                              property_method_t
     use method_calc,   only: method_calc_t
     use dftbstate,     only: dftbstate_t
     use skf,           only: skf_init       => init,            &
@@ -26,12 +25,11 @@ module dftb
                               skf_get_mass   => get_mass
     use orbitals_mod,  only: build_basis_system
     use scc,           only: solve_scc
-    use repulsif,      only: repulsive_energy
-    use coulomb,       only: coulomb_energy
-    use dftb_energy,   only: total_energy, electronic_energy, scc_energy
+    use dftb_energy,   only: compute_energy
     use dftb_grad,     only: compute_gradient
     use write_dftb,    only: write_dftb_final, write_dftb_population, &
                               write_dftb_gradient
+    use timer,         only: start_timer, stop_timer
     use errors,        only: fatal
     implicit none
     private
@@ -113,23 +111,12 @@ contains
                        self%prop%maxscc, self%prop%tolscc,                  &
                        self%prop%write_matrix, self%prop%mixing, self%state)
 
-        self%state%e_rep = repulsive_energy(self%struct)
-        select case (self%prop%scheme)
-        case (SCHEME_BASIC)
-            self%state%e_scc = 0.0_wp
-        case (SCHEME_NOSCC, SCHEME_SCC)
-            self%state%e_scc = scc_energy(self%state%gamma, self%state%dq)
-        end select
-        self%state%e_coul = self%state%e_scc
-        self%state%e_elec = electronic_energy(self%state%occ, &
-                                              self%state%C, &
-                                              self%state%H0)
-        self%state%e_total = total_energy(self%state%e_elec, &
-                                          self%state%e_coul, &
-                                          self%state%e_rep)
+        call compute_energy(self%struct, self%state)
 
         if (self%prop%dograd) then
+            call start_timer("GRADIENT")
             call compute_gradient(self%struct, self%state, self%prop)
+            call stop_timer("GRADIENT")
         else
             self%state%grad = 0.0_wp
         end if
@@ -153,8 +140,10 @@ contains
 
     subroutine dftb_write_output(self)
         class(dftb_calc_t), intent(inout) :: self
-        call write_dftb_final(self%state%e_total, self%state%e_band,  &
-                              self%state%e_elec,  self%state%e_scc,    &
+        call write_dftb_final(self%state%e_total,  &
+                              self%state%e_band,  &
+                              self%state%e_elec,  &
+                              self%state%e_scc,  &
                               self%state%e_rep)
         if (self%prop%dograd) call write_dftb_gradient(self%state%grad)
         call write_dftb_population(self%state)

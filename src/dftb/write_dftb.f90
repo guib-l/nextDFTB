@@ -21,6 +21,12 @@ module write_dftb
     public :: write_dftb_scc_status, write_dftb_final
     public :: write_dftb_matrices, write_dftb_population
     public :: write_dftb_gradient
+    public :: SILENCE_SCC
+
+    !> Flag interne : si .true., les en-têtes, lignes d'itération et
+    !> statut de convergence du cycle SCC ne sont pas écrits. Réservé
+    !> aux appels répétés (gradient numérique, scans, etc.).
+    logical, save :: SILENCE_SCC = .false.
 
     !> Objet de sortie DFTB. Stocke les résultats essentiels et délègue
     !> à `write_dftb_final` pour l'écriture finale.
@@ -44,6 +50,7 @@ contains
         integer,  intent(in) :: maxscc
         real(wp), intent(in) :: tolscc
 
+        if (SILENCE_SCC) return
         call section("SCF cycle")
         call kv_log("scc_enabled", do_scc)
         if (.not. do_scc) return
@@ -58,6 +65,7 @@ contains
         integer,  intent(in) :: it
         real(wp), intent(in) :: dE_elec, max_diff
         logical,  intent(in) :: has_dE
+        if (SILENCE_SCC) return
         if (.not. output_is_open()) return
         if (has_dE) then
             write(output_unit_id(), '(a,i6,a,es18.6,a,es18.6)') &
@@ -71,6 +79,7 @@ contains
     subroutine write_dftb_scc_status(converged, niter)
         logical, intent(in) :: converged
         integer, intent(in) :: niter
+        if (SILENCE_SCC) return
         call line("")
         if (converged) then
             call kv_int("converged in", niter)
